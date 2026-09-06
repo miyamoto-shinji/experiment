@@ -1,0 +1,22 @@
+{
+  "name": "moji-no-mori",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "package": "npm run build && node scripts/package.mjs"
+  },
+  "dependencies": { "three": "0.185.1" },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/three": "^0.185.0",
+    "typescript": "~5.9.3",
+    "vite": "8.2.2",
+    "vitest": "5.0.0"
+  }
+}
