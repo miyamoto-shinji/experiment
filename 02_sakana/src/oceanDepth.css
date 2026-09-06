@@ -1,0 +1,55 @@
+body {
+  --ocean-top: #1f7790;
+  --ocean-middle: #104b60;
+  --ocean-bottom: #072639;
+  background: linear-gradient(170deg, var(--ocean-top) 0%, var(--ocean-middle) 48%, var(--ocean-bottom) 100%);
+}
+.depth-control {
+  position: absolute;
+  right: 48px;
+  bottom: 38px;
+  width: 250px;
+  padding: 17px 21px 14px;
+  border: 1px solid #a4cfdb26;
+  border-radius: 14px;
+  background: #04182866;
+  backdrop-filter: blur(18px);
+  pointer-events: auto;
+  color: #dce7e4;
+}
+.depth-heading { display: flex; align-items: center; justify-content: space-between; }
+.depth-heading label { font-size: 11px; letter-spacing: 0.15em; color: #b5cfd2; }
+.depth-reading { display: flex; gap: 5px; align-items: baseline; }
+.depth-reading output { font-size: 23px; font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+.depth-reading span { font-size: 10px; color: #9bbac0; }
+#ocean-depth {
+  --depth-progress: 6.666%;
+  display: block;
+  width: 100%;
+  height: 24px;
+  margin: 7px 0 1px;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+#ocean-depth::-webkit-slider-runnable-track {
+  height: 3px; border-radius: 3px;
+  background: linear-gradient(to right, #b8dcd4 var(--depth-progress), #57768466 var(--depth-progress));
+}
+#ocean-depth::-moz-range-track { height: 3px; border-radius: 3px; background: #57768466; }
+#ocean-depth::-moz-range-progress { height: 3px; background: #b8dcd4; }
+#ocean-depth::-webkit-slider-thumb {
+  appearance: none; width: 12px; height: 12px; margin-top: -4.5px;
+  border-radius: 50%; border: 2px solid #edf5e4; background: #c1d9c8;
+  box-shadow: 0 0 0 4px #b8dcd418;
+}
+#ocean-depth::-moz-range-thumb {
+  width: 9px; height: 9px; border-radius: 50%; border: 2px solid #edf5e4; background: #c1d9c8;
+}
+#ocean-depth:focus-visible { outline: 2px solid #d4e9be; outline-offset: 4px; border-radius: 4px; }
+.depth-scale { display: flex; justify-content: space-between; color: #9db6c0; font-size: 9px; letter-spacing: 0.03em; }
+@media (max-width: 1100px) { .depth-control { right: 30px; } }
+@media (max-width: 700px) {
+  .depth-control { left: 28px; right: 28px; width: auto; bottom: 45px; padding: 15px 18px 13px; }
+}

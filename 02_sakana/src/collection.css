@@ -1,0 +1,254 @@
+#collection-dialog {
+  width: 760px;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100svh - 48px);
+  padding: 34px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: #e5eeea;
+  background: linear-gradient(145deg, #153b44, #0b2731 74%);
+  border: 1px solid #87b0ae38;
+  border-radius: 24px;
+  box-shadow: 0 32px 120px #0007, inset 0 1px 0 #e6fff608;
+  scrollbar-width: thin;
+  scrollbar-color: #4c7176 transparent;
+}
+
+#collection-dialog::backdrop {
+  background: #03131bd1;
+  backdrop-filter: blur(14px);
+}
+
+#collection-dialog .catalogue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+#collection-dialog .catalogue-heading {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+#collection-dialog .catalogue-title {
+  margin: 0;
+  font: 400 27px/1.5 "Noto Serif JP", serif;
+  letter-spacing: 0.16em;
+}
+
+#collection-dialog .catalogue-count {
+  padding-left: 18px;
+  border-left: 1px solid #99b6b340;
+  color: #9cb7b6;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+}
+
+#collection-dialog .catalogue-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  height: 40px;
+  margin: -4px -5px -4px 0;
+  border: 1px solid #a8c8c41f;
+  border-radius: 50%;
+  background: #cbe5db05;
+  color: #a8c2c0;
+  transition: color 180ms, background 180ms;
+}
+
+#collection-dialog .catalogue-close:hover {
+  color: #f2f9e8;
+  background: #cbe5db10;
+}
+
+#collection-dialog #collection-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+#collection-dialog .catalogue-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #92bdb52b;
+  border-radius: 16px;
+  background: #102e38;
+  color: inherit;
+  text-align: left;
+  transition: border-color 200ms, background 200ms, box-shadow 200ms;
+}
+
+#collection-dialog .catalogue-card:hover {
+  filter: none;
+  border-color: #a8d0c57a;
+  background: #163942;
+  box-shadow: 0 8px 28px #0002;
+}
+
+#collection-dialog .catalogue-card:active {
+  transform: none;
+}
+
+#collection-dialog .catalogue-card:focus-visible,
+#collection-dialog .catalogue-close:focus-visible {
+  outline: 2px solid #d4e9be;
+  outline-offset: 4px;
+}
+
+#collection-dialog .catalogue-card[aria-pressed="true"] {
+  border-color: #bcd3a891;
+  background: #183c40;
+}
+
+#collection-dialog .catalogue-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1.55;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 60%, #7bbdb81c, transparent 65%),
+    linear-gradient(155deg, #2a525a70, #0e283338);
+  border-bottom: 1px solid #94bcb51a;
+}
+
+#collection-dialog .catalogue-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  transform: translateY(9px);
+  transition: transform 300ms ease;
+}
+
+#collection-dialog .catalogue-card:hover .catalogue-image {
+  transform: translateY(7px) scale(1.035);
+}
+
+#collection-dialog .catalogue-number {
+  position: absolute;
+  top: 19px;
+  left: 21px;
+  color: #8aabaa;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  font-variant-numeric: tabular-nums;
+}
+
+#collection-dialog .catalogue-selected {
+  position: absolute;
+  top: 15px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid #c5d8ad38;
+  border-radius: 20px;
+  background: #243f37a6;
+  color: #d2e4b8;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  visibility: hidden;
+}
+
+#collection-dialog .catalogue-selected::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+#collection-dialog .catalogue-card[aria-pressed="true"] .catalogue-selected {
+  visibility: visible;
+}
+
+#collection-dialog .catalogue-details {
+  display: block;
+  padding: 21px 23px 23px;
+}
+
+#collection-dialog .catalogue-name-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+#collection-dialog .catalogue-name {
+  font: 400 23px/1.5 "Noto Serif JP", serif;
+  letter-spacing: 0.12em;
+}
+
+#collection-dialog .catalogue-kanji {
+  color: #8daaac;
+  font: 400 15px/1.5 "Noto Serif JP", serif;
+}
+
+#collection-dialog .catalogue-metadata {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 12px;
+  color: #94b0b1;
+  font-size: 10px;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+}
+
+#collection-dialog .catalogue-length {
+  padding-left: 12px;
+  border-left: 1px solid #9bbab638;
+}
+
+#collection-dialog .catalogue-placeholder {
+  color: #a7ccc644;
+  font: 400 76px/1 "Noto Serif JP", serif;
+}
+
+@media (max-width: 600px) {
+  #collection-dialog {
+    max-width: calc(100vw - 32px);
+    max-height: calc(100svh - 32px);
+    padding: 24px 20px;
+    border-radius: 20px;
+  }
+
+  #collection-dialog .catalogue-header {
+    margin-bottom: 22px;
+  }
+
+  #collection-dialog .catalogue-title {
+    font-size: 24px;
+  }
+
+  #collection-dialog #collection-list {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  #collection-dialog .catalogue-preview {
+    aspect-ratio: 1.9;
+  }
+
+  #collection-dialog .catalogue-details {
+    padding: 15px 20px 18px;
+  }
+
+  #collection-dialog .catalogue-name {
+    font-size: 21px;
+  }
+
+  #collection-dialog .catalogue-metadata {
+    margin-top: 7px;
+  }
+}

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#071e27" />
+    <meta
+      name="description"
+      content="小さな海を、ブラウザのなかに。泳ぐアジやイワシを360度から観察できる、3Dの水族館。"
+    />
+    <title>SAKANA — 小さな海を、ブラウザのなかに。</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230d303b'/%3E%3Cpath d='M10 32Q27 9 45 32Q27 55 10 32M43 32l12-13v26z' fill='%23bfdbc8'/%3E%3Ccircle cx='21' cy='29' r='3' fill='%230d303b'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <div
+      id="aquarium"
+      aria-label="泳ぐアジの3D水槽。ドラッグで回転、スクロールまたはピンチで拡大できます。"
+    ></div>
+    <header class="header">
+      <button class="collection-button" id="collection-open">
+        <span data-icon="grid"></span>図鑑<span class="count" id="species-count"
+          >02</span
+        >
+      </button>
+    </header>
+    <main>
+      <div class="view-tools" aria-label="表示の設定">
+        <button
+          id="reset-view"
+          class="icon-button"
+          title="視点をリセット"
+          aria-label="視点をリセット"
+        >
+          <span data-icon="reset"></span>
+        </button>
+        <button id="zoom-in" class="icon-button" title="拡大" aria-label="拡大">
+          <span data-icon="plus"></span>
+        </button>
+        <button
+          id="zoom-out"
+          class="icon-button"
+          title="縮小"
+          aria-label="縮小"
+        >
+          <span data-icon="minus"></span>
+        </button>
+        <span class="tool-divider"></span>
+        <button
+          id="fullscreen"
+          class="icon-button"
+          title="全画面表示"
+          aria-label="全画面表示"
+        >
+          <span data-icon="expand"></span>
+        </button>
+        <button
+          id="school"
+          class="icon-button"
+          title="群れにする"
+          aria-label="群れにする"
+          aria-pressed="false"
+        >
+          <span data-icon="school"></span>
+        </button>
+      </div>
+      <section class="species-summary">
+        <p class="specimen-number" id="species-number">NO. 001</p>
+        <div class="species-name">
+          <h2 id="species-name">アジ</h2>
+          <span id="species-kanji">鯵</span>
+        </div>
+        <p class="species-description" id="species-description">
+          きらめく銀色の体と、すらりとした尾びれ。<br />体の横に並ぶ「ぜいご」が、アジの目じるし。
+        </p>
+        <div class="tags">
+          <span id="species-family">アジ科</span
+          ><span id="species-length">全長 約20–40 cm</span>
+        </div>
+      </section>
+      <section class="depth-control" aria-label="海の深さ">
+        <div class="depth-heading">
+          <label for="ocean-depth">水深</label>
+          <div class="depth-reading"><output id="depth-value" for="ocean-depth">20</output><span>m</span></div>
+        </div>
+        <input id="ocean-depth" type="range" min="0" max="300" step="5" value="20" />
+        <div class="depth-scale" aria-hidden="true"><span>0 m · 浅い海</span><span>300 m · 深い海</span></div>
+      </section>
+    </main>
+    <div id="toast" role="status"></div>
+    <dialog id="collection-dialog" aria-label="図鑑"></dialog>
+    <div id="loading">
+      <span class="loading-fish">◌</span
+      ><span>小さな海を、準備しています。</span>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
