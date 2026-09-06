@@ -30,7 +30,7 @@ export function initializeOceanDepth(fog: THREE.FogExp2) {
     // Each layer retains its palette if the illustration is still loading or unavailable.
     layer.style.backgroundImage = `linear-gradient(180deg, ${water.top}, ${water.middle} 48%, ${water.bottom})`;
     const image = document.createElement("img");
-    image.src = `/backgrounds/ocean-${water.depth}m.png`;
+    image.src = `${import.meta.env.BASE_URL}backgrounds/ocean-${water.depth}m.png`;
     image.alt = "";
     image.decoding = "async";
     image.draggable = false;
