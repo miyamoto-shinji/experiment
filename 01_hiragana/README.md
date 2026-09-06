@@ -26,6 +26,14 @@ npm run package
 ZIPの作成にはOSの `zip` コマンドを使います。macOSで検証済みです。
 レンタルサーバーには公開ファイルだけを置きます。公開方法は [公開手順書.md](./公開手順書.md) を参照してください。開発用サーバーを外部公開する必要はありません。
 
+## GitHub Pages
+
+公開URL：[もじのもり](https://miyamoto-shinji.github.io/experiment/01_hiragana/)
+
+リポジトリ共通のGitHub Actionsが、`main` の更新時に各アプリをビルドしてフォルダ別に公開します。このアプリは `npm ci` → `npm run build` で作成した `dist/` の中身が `/experiment/01_hiragana/` に配置されます。ZIPの作成や手動アップロードは不要です。
+
+`vite.config.ts` の `base: './'` を維持することで、JavaScript・フォント・画像をこのURL配下から読み込みます。
+
 ## テスト
 
 ```sh

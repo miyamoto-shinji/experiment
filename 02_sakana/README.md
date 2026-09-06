@@ -3,7 +3,7 @@
 Three.jsで作った、泳ぐアジとイワシを観察し、オキアミをあげられるブラウザ用プロトタイプです。
 現在の魚はアジ・イワシの2種類。将来的に約50種類へ増やすため、魚の定義・モデル生成・水槽の表示を分けています。
 
-公開URL: **https://miyamoto-shinji.github.io/experiment/**
+公開URL: **https://miyamoto-shinji.github.io/experiment/02_sakana/**
 
 ## 起動
 
@@ -25,9 +25,9 @@ npm run preview  # 公開用ファイルを http://127.0.0.1:4174/ で確認
 
 ## GitHub Pagesへの公開
 
-`main` ブランチの `02_sakana/` を更新すると、[公開ワークフロー](../.github/workflows/deploy-sakana.yml) が型チェック・ビルドを実行し、GitHub Pagesへ自動で反映します。GitHubのActions画面から手動実行することもできます。
+`main` ブランチを更新すると、[共通の公開ワークフロー](../.github/workflows/deploy-pages.yml) が番号付きの各プロジェクトをビルドし、フォルダ名ごとのURLへ自動で公開します。GitHubのActions画面から手動実行することもできます。
 
-公開するのは `02_sakana/dist/` 内のHTML・JavaScript・CSS・背景画像だけです。`01_hiragana/` や参考画像・ドキュメントは公開用ファイルに含めません。`dist/` をGitに追加する必要はありません。
+この水槽は `02_sakana/dist/` を公開用フォルダの `02_sakana/` へ配置します。ひらがなアプリは別の `01_hiragana/` に配置し、参考画像・ソース・ドキュメントは公開用ファイルに含めません。`dist/` や `_site/` をGitに追加する必要はありません。新しいアプリの追加方法は[リポジトリのREADME](../README.md)を参照してください。
 
 リポジトリの **Settings → Pages → Source** は **GitHub Actions** を使用します。公開先のサブパスでも画像が読み込めるよう、Viteの `base` を相対パスにし、背景画像にも同じ基準を使っています。
 

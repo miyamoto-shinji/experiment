@@ -1,11 +1,8 @@
-name: Deploy SAKANA to GitHub Pages
+name: Deploy experiments to GitHub Pages
 
 on:
   push:
     branches: [main]
-    paths:
-      - "02_sakana/**"
-      - ".github/workflows/deploy-sakana.yml"
   workflow_dispatch:
 
 permissions:
@@ -21,9 +18,6 @@ jobs:
     permissions:
       contents: read
       pages: read
-    defaults:
-      run:
-        working-directory: 02_sakana
     steps:
       - name: Check out source
         uses: actions/checkout@v7.0.1
@@ -32,17 +26,17 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: 02_sakana/package-lock.json
+          cache-dependency-path: "*_*/package-lock.json"
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6.0.0
-      - name: Install dependencies
-        run: npm ci
-      - name: Type-check and build
-        run: npm run build
+      - name: Check publishing layout
+        run: node --test scripts/build-pages.test.mjs
+      - name: Install and build all numbered projects
+        run: node scripts/build-pages.mjs --install
       - name: Upload site
         uses: actions/upload-pages-artifact@v5.0.0
         with:
-          path: 02_sakana/dist
+          path: _site
 
   deploy:
     needs: build

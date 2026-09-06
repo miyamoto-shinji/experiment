@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  // Relative assets work both locally and under the GitHub Pages /experiment/ path.
+  // Relative assets also work under /experiment/02_sakana/ on GitHub Pages.
   base: "./",
 });
