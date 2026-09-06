@@ -9,6 +9,7 @@ const paths = {
   expand: '<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>',
   fish: fishPath,
   school: `<g transform="translate(2 0) scale(.6)">${fishPath}</g><g transform="translate(7 10) scale(.6)">${fishPath}</g>`,
+  shrimp: '<path d="M16 7c-4-2-9 0-10 4s2 8 6 8c3 0 5-2 5-4-3 2-6 1-6-1s2-3 5-2l3-3-3-2ZM7 9l4 3m-5 1 5 1m-4 3 5-1m0 3 1-3m3-9c0-3 2-4 5-4m-4 5c2-1 4-1 5 0M17 15l4 1-3 3-2-2M11 11l-1-4"/><circle cx="15.5" cy="9" r=".75" fill="currentColor" stroke="none"/>',
 };
 
 type IconName = keyof typeof paths;

@@ -66,6 +66,14 @@
         >
           <span data-icon="school"></span>
         </button>
+        <button
+          id="feed"
+          class="icon-button"
+          title="オキアミをあげる"
+          aria-label="オキアミをあげる"
+        >
+          <span data-icon="shrimp"></span>
+        </button>
       </div>
       <section class="species-summary">
         <p class="specimen-number" id="species-number">NO. 001</p>
@@ -84,10 +92,9 @@
       <section class="depth-control" aria-label="海の深さ">
         <div class="depth-heading">
           <label for="ocean-depth">水深</label>
-          <div class="depth-reading"><output id="depth-value" for="ocean-depth">20</output><span>m</span></div>
+          <output id="depth-value" for="ocean-depth" aria-live="off">50 m</output>
         </div>
-        <input id="ocean-depth" type="range" min="0" max="300" step="5" value="20" />
-        <div class="depth-scale" aria-hidden="true"><span>0 m · 浅い海</span><span>300 m · 深い海</span></div>
+        <input id="ocean-depth" class="depth-range" type="range" min="50" max="150" step="50" value="50" aria-valuetext="50メートル" />
       </section>
     </main>
     <div id="toast" role="status"></div>

@@ -87,7 +87,7 @@ button span[data-icon] {
   font-size: 10px;
   border: 1px solid #476264;
   padding: 3px 6px;
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--accent);
 }
 main {
@@ -102,7 +102,7 @@ main button {
 .view-tools {
   position: absolute;
   right: 46px;
-  top: 40%;
+  top: 32%;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -113,7 +113,7 @@ main button {
   display: grid;
   place-items: center;
   background: transparent;
-  border-radius: 50%;
+  border-radius: 0;
   color: #a2bab9;
   transition: background 0.2s;
 }
@@ -123,6 +123,19 @@ main button {
 .icon-button[aria-pressed="true"] {
   color: #e4efb7;
   background: #b3dad018;
+}
+.icon-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.icon-button:disabled:hover {
+  filter: none;
+}
+#feed:not(:disabled):hover {
+  color: #f0c2b1;
+}
+body[data-depth="50"] #feed:not(:disabled):hover {
+  color: #924b3a;
 }
 .icon-button svg {
   width: 18px;
@@ -179,7 +192,7 @@ main button {
 .tags span {
   border: 1px solid var(--line);
   padding: 5px 9px;
-  border-radius: 3px;
+  border-radius: 0;
   font-size: 8px;
   letter-spacing: 0.5px;
   color: #98b0b0;
@@ -194,7 +207,7 @@ main button {
   background: #183d46e8;
   backdrop-filter: blur(10px);
   padding: 13px 23px;
-  border-radius: 8px;
+  border-radius: 0;
   font-size: 11px;
   opacity: 0;
   pointer-events: none;
@@ -274,7 +287,7 @@ main button {
   }
   .view-tools {
     right: 16px;
-    top: 35%;
+    top: 32%;
     gap: 2px;
   }
   .view-tools .icon-button {

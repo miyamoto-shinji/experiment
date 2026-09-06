@@ -1,10 +1,11 @@
 import "./style.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { createFish, type FishInstance } from "./fish/createFish";
+import { createFish, setFishMouthOpen, type FishInstance } from "./fish/createFish";
 import { species } from "./fish/species";
 import { initializeOceanDepth } from "./oceanDepth";
 import { createFishCollection } from "./collection";
+import { createFeeding, type FeedingActor } from "./feeding";
 
 import { initializeIcons, setButtonIcon } from "./icons";
 
@@ -74,6 +75,15 @@ function startAquarium() {
     });
   }
   let school = createSchool(fish);
+  const feeding = createFeeding(scene);
+  function createFeedingActors(): FeedingActor[] {
+    return [fish.group, ...school].map((group) => ({
+      group,
+      mouthPosition: fish.mouthPosition,
+      setMouthOpen: (amount) => setFishMouthOpen(group, amount),
+    }));
+  }
+  let feedingActors = createFeedingActors();
 
   // Soft suspended particles give the water depth without an image or external model.
   const particleCount = 230;
@@ -141,6 +151,7 @@ function startAquarium() {
   const entries = Object.values(species);
   const collection = createFishCollection(dialog, entries, (entry) => {
     if (entry.id === selectedSpecies.id) return;
+    feeding.reset();
     // Replace the entire school before disposing its shared resources.
     const nextFish = createFish(entry);
     const nextSchool = createSchool(nextFish, schoolActive);
@@ -148,6 +159,7 @@ function startAquarium() {
     fish.dispose();
     fish = nextFish;
     school = nextSchool;
+    feedingActors = createFeedingActors();
     selectedSpecies = entry;
     speciesScale.copy(fish.group.scale);
     scene.add(fish.group);
@@ -190,6 +202,10 @@ function startAquarium() {
       schoolActive ? "fish" : "school",
       schoolActive ? "1匹に戻す" : "群れにする",
     );
+  });
+  const feedButton = getElement<HTMLButtonElement>("feed");
+  feedButton.addEventListener("click", () => {
+    feeding.feed(feedingActors, camera);
   });
   function resetView() {
     camera.position.set(0, 0.32, baseDistance);
@@ -253,6 +269,9 @@ function startAquarium() {
       );
       f.rotation.copy(fish.group.rotation);
     });
+    // Explicit feeding remains available when ambient motion is reduced by the OS.
+    feeding.update(delta, feedingActors);
+    feedButton.disabled = !feeding.canFeed;
     particlesMaterial.uniforms.uTime.value = elapsed;
     controls.update();
     renderer.render(scene, camera);
@@ -269,6 +288,8 @@ function startAquarium() {
   renderer.domElement.addEventListener("webglcontextlost", (e) => {
     e.preventDefault();
     cancelAnimationFrame(frame);
+    feeding.reset();
+    feedButton.disabled = true;
     toast("水槽の表示が中断されました。ページを再読み込みしてください。");
   });
   getElement("loading").classList.add("loaded");
