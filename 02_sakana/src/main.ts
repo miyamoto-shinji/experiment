@@ -183,7 +183,7 @@ function startAquarium() {
     );
     renderer.domElement.setAttribute(
       "aria-label",
-      `銀色の${selectedSpecies.name}が泳ぐ3Dビュー`,
+      `${selectedSpecies.name}が泳ぐ3Dビュー`,
     );
     container.setAttribute(
       "aria-label",

@@ -10,7 +10,7 @@ export interface FishSpecies {
   lengthLabel: string;
   scientificName: string;
   family: string;
-  body: "carangid" | "clupeid";
+  body: "carangid" | "clupeid" | "rockfish";
   palette: {
     back: string;
     flank: string;
@@ -70,5 +70,30 @@ export const species: Record<string, FishSpecies> = {
     },
     shape: { length: 1.08, height: 0.8, width: 0.83, tailSize: 0.82 },
     motion: { frequency: 4.0, amplitude: 0.16 },
+  },
+  kasago: {
+    id: "kasago",
+    name: "カサゴ",
+    kanji: "笠子",
+    number: "003",
+    description: [
+      "赤茶色のまだら模様と、扇のような大きな胸びれ。",
+      "背中に並ぶトゲが目じるしの、岩場にすむ魚。",
+    ],
+    lengthLabel: "約30 cm",
+    scientificName: "Sebastiscus marmoratus",
+    family: "メバル科",
+    body: "rockfish",
+    palette: {
+      back: "#775247",
+      flank: "#be6642",
+      belly: "#e3cdb7",
+      fin: "#bd5c32",
+      stripe: "#edc49d",
+      finRay: "#783d2a",
+      finEdge: "#e9ac7d",
+    },
+    shape: { length: 0.97, height: 0.97, width: 1, tailSize: 1 },
+    motion: { frequency: 2.2, amplitude: 0.085 },
   },
 };

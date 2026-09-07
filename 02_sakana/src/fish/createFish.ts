@@ -2,33 +2,14 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { FishSpecies } from "./species";
 import { fishVisualStyle as style } from "./visualStyle";
+import { createRockfish } from "./createRockfish";
+import { setFishMouthOpen, type FishInstance } from "./fishModel";
+export { setFishMouthOpen, type FishInstance } from "./fishModel";
 
-export interface FishInstance {
-  group: THREE.Group;
-  readonly mouthPosition: THREE.Vector3;
-  update: (time: number, mouthOpen?: number) => void;
-  dispose: () => void;
-}
 type Point = [number, number, number];
 
 const mouthHinge = new THREE.Vector2(-1.69, -0.112);
 const jawName = "fish-lower-jaw";
-
-/** The jaw transform is per group, so cloned school members can feed independently. */
-export function setFishMouthOpen(group: THREE.Group, openness: number) {
-  const jaw = group.getObjectByName(jawName);
-  if (!jaw) return;
-  const angle = THREE.MathUtils.clamp(Number.isFinite(openness) ? openness : 0, 0, 1) * 0.67;
-  const c = Math.cos(angle), s = Math.sin(angle);
-  jaw.rotation.z = angle;
-  // Keep vertices in fish coordinates for the shared swimming shader, while
-  // rotating the jaw around its mouth corner instead of the fish's origin.
-  jaw.position.set(
-    mouthHinge.x * (1 - c) + mouthHinge.y * s,
-    mouthHinge.y * (1 - c) - mouthHinge.x * s,
-    0,
-  );
-}
 
 function mouthHeight(x: number) {
   const t = THREE.MathUtils.clamp((x + 1.98) / (mouthHinge.x + 1.98), 0, 1);
@@ -232,6 +213,7 @@ function mouthInteriorGeometry() {
 }
 
 export function createFish(spec: FishSpecies): FishInstance {
+  if (spec.body === "rockfish") return createRockfish(spec);
   if (spec.body !== "carangid" && spec.body !== "clupeid")
     throw new Error(`Unsupported fish body: ${spec.body}`);
   const isSardine = spec.body === "clupeid";
