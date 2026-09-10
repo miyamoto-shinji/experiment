@@ -2,39 +2,12 @@ body {
   --ocean-top: #9ce8f7;
   --ocean-middle: #349dcd;
   --ocean-bottom: #84c9dc;
-  background: linear-gradient(180deg, var(--ocean-top), var(--ocean-middle) 48%, var(--ocean-bottom));
-}
-
-.ocean-background,
-.ocean-background-layer,
-.ocean-background-layer img {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-.ocean-background {
-  z-index: 0;
-  overflow: hidden;
-}
-
-.ocean-background-layer,
-.ocean-background-layer img {
-  opacity: 0;
-  transition: opacity 450ms ease;
-}
-
-.ocean-background-layer.is-active,
-.ocean-background-layer img.is-loaded {
-  opacity: 1;
-}
-
-.ocean-background-layer img {
-  display: block;
-  object-fit: cover;
-  object-position: center;
+  background: linear-gradient(
+    180deg,
+    var(--ocean-top),
+    var(--ocean-middle) 48%,
+    var(--ocean-bottom)
+  );
 }
 
 .depth-control {
@@ -72,7 +45,11 @@ body {
 
 .depth-range {
   --depth-progress: 0%;
-  --depth-track: linear-gradient(to right, #c3dbcc var(--depth-progress), #acc7cd40 var(--depth-progress));
+  --depth-track: linear-gradient(
+    to right,
+    #c3dbcc var(--depth-progress),
+    #acc7cd40 var(--depth-progress)
+  );
   display: block;
   appearance: none;
   -webkit-appearance: none;
@@ -114,11 +91,18 @@ body {
   background: #dce9df;
   transition: background 150ms;
 }
-.depth-range:hover::-webkit-slider-thumb { background: #fff; }
-.depth-range:hover::-moz-range-thumb { background: #fff; }
-.depth-range:focus-visible { outline: 1px solid #c3dbcc; outline-offset: 3px; }
+.depth-range:hover::-webkit-slider-thumb {
+  background: #fff;
+}
+.depth-range:hover::-moz-range-thumb {
+  background: #fff;
+}
+.depth-range:focus-visible {
+  outline: 1px solid #c3dbcc;
+  outline-offset: 3px;
+}
 
-/* Keep the existing controls readable against the bright 50 m illustration. */
+/* Keep the existing controls readable against the bright 50 m environment. */
 body[data-depth="50"] .collection-button {
   padding: 9px 13px;
   margin-right: -13px;
@@ -128,8 +112,13 @@ body[data-depth="50"] .collection-button {
   color: #14374e;
   backdrop-filter: blur(12px);
 }
-body[data-depth="50"] .collection-button svg { color: #244f64; }
-body[data-depth="50"] .collection-button .count { color: #275669; border-color: #4067774d; }
+body[data-depth="50"] .collection-button svg {
+  color: #244f64;
+}
+body[data-depth="50"] .collection-button .count {
+  color: #275669;
+  border-color: #4067774d;
+}
 body[data-depth="50"] .view-tools {
   padding: 6px;
   margin: -6px;
@@ -138,11 +127,23 @@ body[data-depth="50"] .view-tools {
   background: #e4f5fcbd;
   backdrop-filter: blur(12px);
 }
-body[data-depth="50"] .icon-button { color: #244a62; }
-body[data-depth="50"] .icon-button:hover { background: #24648114; }
-body[data-depth="50"] .icon-button[aria-pressed="true"] { color: #f2fbff; background: #245674; }
-body[data-depth="50"] .tool-divider { background: #28576f30; }
-body[data-depth="50"] .species-summary { isolation: isolate; color: #12334b; }
+body[data-depth="50"] .icon-button {
+  color: #244a62;
+}
+body[data-depth="50"] .icon-button:hover {
+  background: #24648114;
+}
+body[data-depth="50"] .icon-button[aria-pressed="true"] {
+  color: #f2fbff;
+  background: #245674;
+}
+body[data-depth="50"] .tool-divider {
+  background: #28576f30;
+}
+body[data-depth="50"] .species-summary {
+  isolation: isolate;
+  color: #12334b;
+}
 body[data-depth="50"] .species-summary::before {
   content: "";
   position: absolute;
@@ -152,22 +153,43 @@ body[data-depth="50"] .species-summary::before {
   background: linear-gradient(110deg, #ebfaffdb, #e7f6ffad);
   backdrop-filter: blur(12px);
 }
-body[data-depth="50"] .specimen-number { color: #3c6579; }
-body[data-depth="50"] .species-name > span { color: #3d6475; border-color: #27526738; }
-body[data-depth="50"] .species-description { color: #244f64; }
-body[data-depth="50"] .tags span { color: #30596c; border-color: #315f752e; }
+body[data-depth="50"] .specimen-number {
+  color: #3c6579;
+}
+body[data-depth="50"] .species-name > span {
+  color: #3d6475;
+  border-color: #27526738;
+}
+body[data-depth="50"] .species-description {
+  color: #244f64;
+}
+body[data-depth="50"] .tags span {
+  color: #30596c;
+  border-color: #315f752e;
+}
 body[data-depth="50"] .collection-button:focus-visible,
-body[data-depth="50"] .icon-button:focus-visible { outline-color: #15476a; }
+body[data-depth="50"] .icon-button:focus-visible {
+  outline-color: #15476a;
+}
 
 @media (max-width: 1100px) {
-  .depth-control { right: 30px; }
+  .depth-control {
+    right: 30px;
+  }
 }
 @media (max-width: 700px) {
-  .depth-control { left: 28px; right: 28px; width: auto; bottom: 45px; padding: 14px 20px 10px; }
-  body[data-depth="50"] .collection-button { margin-right: -7px; padding: 8px 10px; }
-  body[data-depth="50"] .species-summary::before { inset: -14px -16px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ocean-background-layer,
-  .ocean-background-layer img { transition: none; }
+  .depth-control {
+    left: 28px;
+    right: 28px;
+    width: auto;
+    bottom: 45px;
+    padding: 14px 20px 10px;
+  }
+  body[data-depth="50"] .collection-button {
+    margin-right: -7px;
+    padding: 8px 10px;
+  }
+  body[data-depth="50"] .species-summary::before {
+    inset: -14px -16px;
+  }
 }

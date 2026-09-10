@@ -6,9 +6,15 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5174",
     "build": "tsc --noEmit && vite build",
-    "test": "node scripts/check-fish.mjs",
+    "test": "node scripts/check-ocean.mjs && node scripts/check-shelter.mjs && node scripts/check-school.mjs && node scripts/check-fish.mjs && node scripts/check-rock-clearance.mjs && node scripts/check-aquarium-fish.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 4174"
   },
-  "dependencies": { "three": "0.185.1" },
-  "devDependencies": { "@types/three": "^0.185.0", "typescript": "~5.9.3", "vite": "8.2.2" }
+  "dependencies": {
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.0",
+    "typescript": "~5.9.3",
+    "vite": "8.2.2"
+  }
 }

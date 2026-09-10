@@ -3,6 +3,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { FishSpecies } from "./species";
 import { fishVisualStyle as style } from "./visualStyle";
 import { createRockfish } from "./createRockfish";
+import { applyFishSwimming } from "./swimMaterial";
 import { setFishMouthOpen, type FishInstance } from "./fishModel";
 export { setFishMouthOpen, type FishInstance } from "./fishModel";
 
@@ -141,35 +142,52 @@ function skinTexture(spec: FishSpecies) {
 }
 
 function bodyGeometry() {
-  const vertices: number[] = [], uvs: number[] = [];
-  const bodyIndices: number[] = [], jawIndices: number[] = [];
-  const rings = 112, headRings = 10, sides = 64;
+  const vertices: number[] = [],
+    uvs: number[] = [];
+  const bodyIndices: number[] = [],
+    jawIndices: number[] = [];
+  const rings = 112,
+    headRings = 10,
+    sides = 64;
   const [hingeHeight, , hingeCenter] = section(mouthHinge.x);
   const hingeAngle = Math.acos((mouthHinge.y - hingeCenter) / hingeHeight);
   for (let i = 0; i <= rings; i++) {
-    const x = i <= headRings
-      ? THREE.MathUtils.lerp(-1.98, mouthHinge.x, i / headRings)
-      : THREE.MathUtils.lerp(mouthHinge.x, 1.9, (i - headRings) / (rings - headRings));
+    const x =
+      i <= headRings
+        ? THREE.MathUtils.lerp(-1.98, mouthHinge.x, i / headRings)
+        : THREE.MathUtils.lerp(
+            mouthHinge.x,
+            1.9,
+            (i - headRings) / (rings - headRings),
+          );
     const [h, w, cy] = section(x);
-    const lipAngle = i <= headRings
-      ? Math.acos(THREE.MathUtils.clamp((mouthHeight(x) - cy) / h, -1, 1))
-      : THREE.MathUtils.lerp(hingeAngle, Math.PI / 2, THREE.MathUtils.smoothstep(x, mouthHinge.x, -1.4));
+    const lipAngle =
+      i <= headRings
+        ? Math.acos(THREE.MathUtils.clamp((mouthHeight(x) - cy) / h, -1, 1))
+        : THREE.MathUtils.lerp(
+            hingeAngle,
+            Math.PI / 2,
+            THREE.MathUtils.smoothstep(x, mouthHinge.x, -1.4),
+          );
     for (let j = 0; j <= sides; j++) {
       // Include the lip boundaries in every head ring. Both halves therefore
       // share exactly the same seam instead of overlapping floating lip pieces.
-      const angle = j <= 16
-        ? lipAngle * j / 16
-        : j <= 48
-          ? lipAngle + (Math.PI * 2 - lipAngle * 2) * (j - 16) / 32
-          : Math.PI * 2 - lipAngle + lipAngle * (j - 48) / 16;
+      const angle =
+        j <= 16
+          ? (lipAngle * j) / 16
+          : j <= 48
+            ? lipAngle + ((Math.PI * 2 - lipAngle * 2) * (j - 16)) / 32
+            : Math.PI * 2 - lipAngle + (lipAngle * (j - 48)) / 16;
       vertices.push(x, cy + Math.cos(angle) * h, Math.sin(angle) * w);
       uvs.push((x + 1.98) / 3.88, 1 - angle / (Math.PI * 2));
     }
   }
   for (let i = 0; i < rings; i++)
     for (let j = 0; j < sides; j++) {
-      const indices = i < headRings && j >= 16 && j < 48 ? jawIndices : bodyIndices;
-      const a = i * (sides + 1) + j, b = a + sides + 1;
+      const indices =
+        i < headRings && j >= 16 && j < 48 ? jawIndices : bodyIndices;
+      const a = i * (sides + 1) + j,
+        b = a + sides + 1;
       indices.push(a, a + 1, b, b, a + 1, b + 1);
     }
   const nose = vertices.length / 3;
@@ -178,7 +196,10 @@ function bodyGeometry() {
   for (let j = 0; j < sides; j++)
     (j >= 16 && j < 48 ? jawIndices : bodyIndices).push(nose, j + 1, j);
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(vertices, 3),
+  );
   geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   // Compute normals before separating the surfaces, preserving a smooth closed snout.
   geometry.setIndex([...bodyIndices, ...jawIndices]);
@@ -191,7 +212,8 @@ function bodyGeometry() {
 
 /** Inner surfaces meet the lip seam and extend back to the mouth corner. */
 function mouthInteriorGeometry() {
-  const positions: number[] = [], indices: number[] = [];
+  const positions: number[] = [],
+    indices: number[] = [];
   const segments = 32;
   for (let i = 0; i <= segments; i++) {
     const x = THREE.MathUtils.lerp(-1.98, mouthHinge.x, i / segments);
@@ -206,7 +228,10 @@ function mouthInteriorGeometry() {
   positions.push(-1.99, 0.055, 0);
   indices.push(nose, 1, 0);
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(positions, 3),
+  );
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
@@ -222,22 +247,15 @@ export function createFish(spec: FishSpecies): FishInstance {
   const time = { value: 0 };
   const materials = new Set<THREE.Material>();
   function animated<T extends THREE.MeshStandardMaterial>(material: T): T {
-    material.onBeforeCompile = (shader) => {
-      shader.uniforms.uFishTime = time;
-      shader.vertexShader =
-        `uniform float uFishTime;
-        float bend(float x) { float s=max(0.0,(x+1.05)/3.6); return sin(uFishTime*${spec.motion.frequency.toFixed(3)}-x*1.8)*s*s*${spec.motion.amplitude.toFixed(3)}*3.0; }
-      ` + shader.vertexShader;
-      shader.vertexShader = shader.vertexShader.replace(
-        "#include <beginnormal_vertex>",
-        "#include <beginnormal_vertex>\n objectNormal.x -= ((bend(position.x+0.01)-bend(position.x-0.01))/0.02)*objectNormal.z;",
-      );
-      shader.vertexShader = shader.vertexShader.replace(
-        "#include <begin_vertex>",
-        "#include <begin_vertex>\n transformed.z += bend(position.x);",
-      );
-    };
-    material.customProgramCacheKey = () => `fish-${spec.id}`;
+    applyFishSwimming(material, {
+      time,
+      frequency: spec.motion.frequency,
+      amplitude: spec.motion.amplitude,
+      origin: 1.05,
+      span: 3.6,
+      wavelength: 1.8,
+      cacheKey: `fish-${spec.id}`,
+    });
     materials.add(material);
     return material;
   }
@@ -318,7 +336,7 @@ export function createFish(spec: FishSpecies): FishInstance {
   jaw.add(new THREE.Mesh(bodyParts.jaw, skin));
   group.add(jaw);
   const mouthInterior = new THREE.MeshStandardMaterial({
-    color: "#13212b",
+    color: style.details.mouthInterior,
     roughness: 1,
     side: THREE.DoubleSide,
   });

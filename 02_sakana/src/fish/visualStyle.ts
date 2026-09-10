@@ -18,6 +18,7 @@ export const fishVisualStyle = {
   fin: { metalness: 0.18, roughness: 0.42, clearcoat: 0.3 },
   details: {
     outline: "#324653",
+    mouthInterior: "#13212b",
     finRay: "#b0a15a",
     eyeRim: "#33464f",
     iris: "#eee7bd",

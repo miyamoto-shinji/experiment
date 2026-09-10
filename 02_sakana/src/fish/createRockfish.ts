@@ -3,224 +3,17 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { FishSpecies } from "./species";
 import { setFishMouthOpen, type FishInstance } from "./fishModel";
 
-type Point = [number, number, number];
-const hinge: [number, number] = [-1.17, -0.28];
-const snout = -2.06;
-// A broad head and deep shoulder, with a short, thick tail wrist.
-const profile = [
-  [snout, 0.045, 0.11, 0.015],
-  [-1.88, 0.3, 0.27, -0.015],
-  [-1.6, 0.49, 0.4, 0.015],
-  [-1.22, 0.67, 0.52, 0],
-  [-0.7, 0.77, 0.56, -0.025],
-  [-0.12, 0.72, 0.49, -0.04],
-  [0.48, 0.55, 0.37, -0.03],
-  [1, 0.33, 0.235, 0.005],
-  [1.38, 0.145, 0.14, 0.045],
-  [1.65, 0.105, 0.115, 0.065],
-  [1.82, 0.07, 0.085, 0.065],
-];
-
-function section(x: number) {
-  let i = 0;
-  while (i < profile.length - 2 && x > profile[i + 1][0]) i++;
-  const a = profile[i],
-    b = profile[i + 1];
-  const t = THREE.MathUtils.clamp((x - a[0]) / (b[0] - a[0]), 0, 1);
-  return [1, 2, 3].map((k) => {
-    const prev = profile[Math.max(0, i - 1)],
-      next = profile[Math.min(profile.length - 1, i + 2)];
-    const m0 = ((b[k] - prev[k]) / (b[0] - prev[0])) * (b[0] - a[0]);
-    const m1 = ((next[k] - a[k]) / (next[0] - a[0])) * (b[0] - a[0]);
-    return (
-      (2 * t ** 3 - 3 * t * t + 1) * a[k] +
-      (t ** 3 - 2 * t * t + t) * m0 +
-      (-2 * t ** 3 + 3 * t * t) * b[k] +
-      (t ** 3 - t * t) * m1
-    );
-  });
-}
-
-function surface(x: number, y: number, side: number, lift = 0.008): Point {
-  const [h, w, cy] = section(x);
-  return [
-    x,
-    y,
-    (w * Math.sqrt(Math.max(0, 1 - ((y - cy) / h) ** 2)) + lift) * side,
-  ];
-}
-
-function lipHeight(x: number) {
-  const t = THREE.MathUtils.clamp((x - snout) / (hinge[0] - snout), 0, 1);
-  return 0.015 - 0.295 * t ** 0.9;
-}
-
-function mottledTexture(spec: FishSpecies) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 1024;
-  canvas.height = 512;
-  const ctx = canvas.getContext("2d")!;
-  const base = ctx.createLinearGradient(0, 0, 0, 512);
-  for (const [stop, color] of [
-    [0, spec.palette.back],
-    [0.13, "#9c593f"],
-    [0.26, spec.palette.flank],
-    [0.38, "#d2966f"],
-    [0.45, spec.palette.belly],
-    [0.5, "#c3b4a7"],
-    [0.55, spec.palette.belly],
-    [0.62, "#d2966f"],
-    [0.74, spec.palette.flank],
-    [0.87, "#9c593f"],
-    [1, spec.palette.back],
-  ] as [number, string][])
-    base.addColorStop(stop, color);
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, 1024, 512);
-  let seed = 42137;
-  const random = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-  function patch(x: number, y: number, rx: number, ry: number, color: string) {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2,
-        radius = 0.64 + random() * 0.45;
-      const px = x + Math.cos(a) * rx * radius,
-        py = y + Math.sin(a) * ry * radius;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fill();
-  }
-  for (const side of [0, 1]) {
-    const y = (value: number) => (side === 0 ? value : 512 - value);
-    // Uneven, broad patches, rather than an evenly spaced dot pattern.
-    for (let i = 0; i < 44; i++) {
-      patch(
-        random() * 1060 - 18,
-        y(12 + random() * 180),
-        24 + random() * 50,
-        10 + random() * 24,
-        ["#884e3cb8", "#9b5038bb", "#d17443ad"][i % 3],
-      );
-    }
-    for (let i = 0; i < 58; i++) {
-      const large = i % 4 === 0;
-      patch(
-        random() * 1024,
-        y(20 + random() * 183),
-        large ? 28 + random() * 16 : 9 + random() * 12,
-        large ? 17 + random() * 10 : 5 + random() * 8,
-        ["#edc5a0", "#d8a581", "#f0ceab"][i % 3],
-      );
-    }
-    for (let i = 0; i < 130; i++) {
-      patch(
-        random() * 1024,
-        y(random() * 245),
-        20 + random() * 24,
-        10 + random() * 12,
-        i % 2 ? "#fff0d609" : "#582e250b",
-      );
-    }
-  }
-  // A broad, warm sheen gives volume under the aquarium's uniform lighting.
-  for (const y of [96, 416]) {
-    ctx.save();
-    ctx.translate(400, y);
-    ctx.scale(400, 20);
-    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-    glow.addColorStop(0, "#ffe0b91a");
-    glow.addColorStop(1, "#ffe0b900");
-    ctx.fillStyle = glow;
-    ctx.fillRect(-1, -1, 2, 2);
-    ctx.restore();
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 8;
-  return texture;
-}
-
-function headAndBody() {
-  const positions: number[] = [],
-    uv: number[] = [],
-    bodyIndices: number[] = [],
-    jawIndices: number[] = [];
-  const rings = 104,
-    headRings = 30,
-    sides = 48;
-  const [hh, , hc] = section(hinge[0]);
-  const hingeAngle = Math.acos((hinge[1] - hc) / hh);
-  for (let i = 0; i <= rings; i++) {
-    const x =
-      i <= headRings
-        ? THREE.MathUtils.lerp(snout, hinge[0], i / headRings)
-        : THREE.MathUtils.lerp(
-            hinge[0],
-            1.82,
-            (i - headRings) / (rings - headRings),
-          );
-    const [h, w, cy] = section(x);
-    const lip =
-      i <= headRings
-        ? Math.acos(THREE.MathUtils.clamp((lipHeight(x) - cy) / h, -1, 1))
-        : THREE.MathUtils.lerp(
-            hingeAngle,
-            Math.PI / 2,
-            THREE.MathUtils.smoothstep(x, hinge[0], -0.7),
-          );
-    for (let j = 0; j <= sides; j++) {
-      const angle =
-        j <= 12
-          ? (lip * j) / 12
-          : j <= 36
-            ? lip + ((2 * Math.PI - 2 * lip) * (j - 12)) / 24
-            : 2 * Math.PI - lip + (lip * (j - 36)) / 12;
-      positions.push(x, cy + Math.cos(angle) * h, Math.sin(angle) * w);
-      uv.push((x - snout) / (1.82 - snout), 1 - angle / (2 * Math.PI));
-      if (i < rings && j < sides) {
-        const a = i * (sides + 1) + j,
-          b = a + sides + 1;
-        (i < headRings && j >= 12 && j < 36 ? jawIndices : bodyIndices).push(
-          a,
-          a + 1,
-          b,
-          b,
-          a + 1,
-          b + 1,
-        );
-      }
-    }
-  }
-  const nose = positions.length / 3;
-  positions.push(-2.09, 0.015, 0);
-  uv.push(0, 0.5);
-  for (let j = 0; j < sides; j++)
-    (j >= 12 && j < 36 ? jawIndices : bodyIndices).push(nose, j + 1, j);
-  const tail = positions.length / 3;
-  positions.push(1.83, 0.065, 0);
-  uv.push(1, 0.5);
-  for (let j = 0; j < sides; j++)
-    bodyIndices.push(
-      tail,
-      rings * (sides + 1) + j,
-      rings * (sides + 1) + j + 1,
-    );
-  const body = new THREE.BufferGeometry();
-  body.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  body.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
-  body.setIndex([...bodyIndices, ...jawIndices]);
-  body.computeVertexNormals();
-  const jaw = body.clone();
-  body.setIndex(bodyIndices);
-  jaw.setIndex(jawIndices);
-  return { body, jaw };
-}
+import {
+  headAndBody,
+  section,
+  surface,
+  mouthTip,
+  type Point,
+} from "./rockfishShape";
+import { mottledTexture } from "./rockfishTexture";
+import { createRockfishMouth } from "./rockfishMouth";
+import { fishVisualStyle as style } from "./visualStyle";
+import { applyFishSwimming } from "./swimMaterial";
 
 export function createRockfish(spec: FishSpecies): FishInstance {
   const group = new THREE.Group();
@@ -238,22 +31,15 @@ export function createRockfish(spec: FishSpecies): FishInstance {
       metalness: 0.06,
       ...extra,
     });
-    result.onBeforeCompile = (shader) => {
-      shader.uniforms.uFishTime = time;
-      shader.vertexShader =
-        `uniform float uFishTime;
-        float bend(float x){float s=max(0.0,(x+0.8)/3.5);return sin(uFishTime*${spec.motion.frequency.toFixed(3)}-x*1.5)*s*s*${spec.motion.amplitude.toFixed(3)}*3.0;}
-        ` + shader.vertexShader;
-      shader.vertexShader = shader.vertexShader.replace(
-        "#include <beginnormal_vertex>",
-        "#include <beginnormal_vertex>\nobjectNormal.x-=((bend(position.x+.01)-bend(position.x-.01))/.02)*objectNormal.z;",
-      );
-      shader.vertexShader = shader.vertexShader.replace(
-        "#include <begin_vertex>",
-        "#include <begin_vertex>\ntransformed.z+=bend(position.x);",
-      );
-    };
-    result.customProgramCacheKey = () => `rockfish-${spec.id}`;
+    applyFishSwimming(result, {
+      time,
+      frequency: spec.motion.frequency,
+      amplitude: spec.motion.amplitude,
+      origin: 0.8,
+      span: 3.5,
+      wavelength: 1.5,
+      cacheKey: `rockfish-${spec.id}`,
+    });
     materials.add(result);
     return result;
   }
@@ -272,7 +58,12 @@ export function createRockfish(spec: FishSpecies): FishInstance {
     emissive: "#fff8e7",
     emissiveIntensity: 0.45,
   });
-  const inside = material("#412b28", { side: THREE.DoubleSide, roughness: 1 });
+  const inside = material(style.details.mouthInterior, {
+    side: THREE.DoubleSide,
+    roughness: 1,
+    metalness: 0,
+  });
+  const mouthLip = material("#c88761", { side: THREE.DoubleSide });
   function mesh(
     geometry: THREE.BufferGeometry,
     mat: THREE.Material,
@@ -314,96 +105,13 @@ export function createRockfish(spec: FishSpecies): FishInstance {
   }
   const parts = headAndBody();
   mesh(parts.body, skin);
-  const jaw = new THREE.Group();
-  jaw.name = "fish-lower-jaw";
-  jaw.userData.hinge = hinge;
-  jaw.userData.maxAngle = 0.56;
-  group.add(jaw);
-  mesh(parts.jaw, skin, jaw);
-  const innerPositions: number[] = [],
-    innerIndices: number[] = [];
-  for (let i = 0; i <= 36; i++) {
-    const x = THREE.MathUtils.lerp(snout, hinge[0], i / 36),
-      y = lipHeight(x);
-    innerPositions.push(...surface(x, y, -1, 0), ...surface(x, y, 1, 0));
-    if (i < 36) {
-      const a = i * 2;
-      innerIndices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
-    }
-  }
-  const inner = new THREE.BufferGeometry();
-  inner.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute(innerPositions, 3),
+  group.add(
+    createRockfishMouth(parts.jaw, parts.jawRoot, {
+      skin,
+      lip: mouthLip,
+      inside,
+    }),
   );
-  inner.setIndex(innerIndices);
-  inner.computeVertexNormals();
-  mesh(inner, inside);
-  mesh(inner.clone(), inside, jaw);
-  function mouthLine(drop = 0): Point[] {
-    const halves = [-1, 1].map((side) =>
-      Array.from({ length: 37 }, (_, i) => {
-        const t = i / 36,
-          x = THREE.MathUtils.lerp(snout, hinge[0], t);
-        return surface(
-          x,
-          lipHeight(x) - drop * Math.sin(Math.PI * t),
-          side,
-          0.002,
-        );
-      }),
-    );
-    return [...halves[0].reverse(), [-2.09, 0.015, 0], ...halves[1]];
-  }
-  tube(mouthLine(), 0.021, lipMaterial);
-  tube(mouthLine(0.028), 0.024, lipMaterial, jaw);
-
-  // Recessed cheek linings close the sides of the gape. Their lower edges follow
-  // the jaw exactly; each cloned mesh retains independent morph influences.
-  const liningPositions: number[] = [],
-    liningNormals: number[] = [];
-  const liningIndices: number[] = [],
-    cosineDelta: number[] = [],
-    sineDelta: number[] = [];
-  for (const side of [-1, 1]) {
-    const start = liningPositions.length / 3;
-    const contour: Point[] = [[-2.09, 0.015, 0]];
-    for (let i = 0; i <= 36; i++) {
-      const x = THREE.MathUtils.lerp(snout, hinge[0], i / 36);
-      contour.push(surface(x, lipHeight(x), side, -0.004));
-    }
-    for (let i = 0; i < contour.length; i++) {
-      const [x, y, z] = contour[i];
-      liningPositions.push(x, y, z, x, y, z);
-      liningNormals.push(0, 0, side, 0, 0, side);
-      cosineDelta.push(0, 0, 0, x - hinge[0], y - hinge[1], 0);
-      sineDelta.push(0, 0, 0, -(y - hinge[1]), x - hinge[0], 0);
-      if (i < contour.length - 1) {
-        const a = start + i * 2,
-          b = a + 2;
-        const indices = [a, a + 1, b, b, a + 1, b + 1];
-        liningIndices.push(...(side === 1 ? indices : indices.reverse()));
-      }
-    }
-  }
-  const liningGeometry = new THREE.BufferGeometry();
-  liningGeometry.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute(liningPositions, 3),
-  );
-  liningGeometry.setAttribute(
-    "normal",
-    new THREE.Float32BufferAttribute(liningNormals, 3),
-  );
-  liningGeometry.setIndex(liningIndices);
-  liningGeometry.morphTargetsRelative = true;
-  liningGeometry.morphAttributes.position = [
-    new THREE.Float32BufferAttribute(cosineDelta, 3),
-    new THREE.Float32BufferAttribute(sineDelta, 3),
-  ];
-  const mouthParts = new THREE.Group();
-  group.add(mouthParts);
-  mesh(liningGeometry, inside, mouthParts).name = "fish-mouth-lining";
 
   function finSurface(
     point: (t: number, v: number) => THREE.Vector3,
@@ -691,7 +399,7 @@ export function createRockfish(spec: FishSpecies): FishInstance {
   group.scale.set(spec.shape.length, spec.shape.height, spec.shape.width);
   return {
     group,
-    mouthPosition: new THREE.Vector3(-2.09, -0.16, 0),
+    mouthPosition: new THREE.Vector3(...mouthTip),
     update(t, open = 0) {
       time.value = t;
       setFishMouthOpen(group, open);

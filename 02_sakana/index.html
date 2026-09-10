@@ -2,7 +2,140 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <style>
+      /* Critical startup UI is independent of application scripts, CSS and fonts. */
+      html,
+      body {
+        margin: 0;
+        background: #071e27;
+        touch-action: pan-x pan-y;
+      }
+      #app {
+        height: 100%;
+      }
+      #loading {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 22px;
+        padding: 28px;
+        box-sizing: border-box;
+        background: #071e27;
+        color: #dce7e4;
+        text-align: center;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+          "Yu Gothic", sans-serif;
+        transition: opacity 280ms ease;
+      }
+      #loading.loaded {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .loading-mark {
+        width: 62px;
+        height: 34px;
+        color: #bad2c1;
+        animation: loading-swim 2.4s ease-in-out infinite;
+      }
+      #loading-message {
+        margin: 0;
+        font-size: 11px;
+        line-height: 1.9;
+        letter-spacing: 0.16em;
+      }
+      .loading-track {
+        width: 112px;
+        height: 1px;
+        overflow: hidden;
+        background: #28404a;
+      }
+      .loading-track::after {
+        content: "";
+        display: block;
+        height: 100%;
+        width: 45%;
+        background: #bad2c1;
+        animation: loading-progress 1.8s ease-in-out infinite;
+      }
+      #loading-retry {
+        margin-top: 3px;
+        padding: 11px 22px;
+        border: 1px solid #607d83;
+        border-radius: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-size: 11px;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      #loading-retry:focus-visible {
+        outline: 2px solid #bad2c1;
+        outline-offset: 4px;
+      }
+      #loading[data-state="error"] .loading-mark,
+      #loading[data-state="error"] .loading-track::after {
+        animation: none;
+      }
+      #loading noscript {
+        max-width: 240px;
+        font-size: 12px;
+        line-height: 1.9;
+      }
+      @keyframes loading-swim {
+        50% {
+          transform: translateX(5px);
+        }
+      }
+      @keyframes loading-progress {
+        from {
+          transform: translateX(-105%);
+        }
+        to {
+          transform: translateX(230%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #loading,
+        .loading-mark,
+        .loading-track::after {
+          animation: none;
+          transition: none;
+        }
+      }
+    </style>
+    <script>
+      // Also catch a failed entry download before the module bootstrap can run.
+      window.addEventListener(
+        "error",
+        (event) => {
+          if (
+            event.target instanceof HTMLScriptElement &&
+            event.target.type === "module"
+          ) {
+            document.documentElement.dataset.startupError = "true";
+            window.dispatchEvent(new Event("aquarium:startup-error"));
+          }
+        },
+        true,
+      );
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500&family=Noto+Serif+JP:wght@400&display=swap"
+      media="print"
+      onload="this.media = 'all'"
+    />
     <meta name="theme-color" content="#071e27" />
     <meta
       name="description"
@@ -16,93 +149,173 @@
     />
   </head>
   <body>
-    <div
-      id="aquarium"
-      aria-label="泳ぐアジの3D水槽。ドラッグで回転、スクロールまたはピンチで拡大できます。"
-    ></div>
-    <header class="header">
-      <button class="collection-button" id="collection-open">
-        <span data-icon="grid"></span>図鑑<span class="count" id="species-count"
-          >03</span
-        >
-      </button>
-    </header>
-    <main>
-      <div class="view-tools" aria-label="表示の設定">
-        <button
-          id="reset-view"
-          class="icon-button"
-          title="視点をリセット"
-          aria-label="視点をリセット"
-        >
-          <span data-icon="reset"></span>
+    <div id="app" inert aria-hidden="true">
+      <div
+        id="aquarium"
+        aria-label="泳ぐアジの3D水槽。ドラッグで回転、拡大・縮小ボタンで大きさを変更できます。"
+      ></div>
+      <header class="header">
+        <button class="collection-button" id="collection-open">
+          <span data-icon="grid"></span>図鑑<span
+            class="count"
+            id="species-count"
+            >03</span
+          >
         </button>
-        <button id="zoom-in" class="icon-button" title="拡大" aria-label="拡大">
-          <span data-icon="plus"></span>
-        </button>
-        <button
-          id="zoom-out"
-          class="icon-button"
-          title="縮小"
-          aria-label="縮小"
-        >
-          <span data-icon="minus"></span>
-        </button>
-        <span class="tool-divider"></span>
-        <button
-          id="fullscreen"
-          class="icon-button"
-          title="全画面表示"
-          aria-label="全画面表示"
-        >
-          <span data-icon="expand"></span>
-        </button>
-        <button
-          id="school"
-          class="icon-button"
-          title="群れにする"
-          aria-label="群れにする"
-          aria-pressed="false"
-        >
-          <span data-icon="school"></span>
-        </button>
-        <button
-          id="feed"
-          class="icon-button"
-          title="オキアミをあげる"
-          aria-label="オキアミをあげる"
-        >
-          <span data-icon="shrimp"></span>
-        </button>
-      </div>
-      <section class="species-summary">
-        <p class="specimen-number" id="species-number">NO. 001</p>
-        <div class="species-name">
-          <h2 id="species-name">アジ</h2>
-          <span id="species-kanji">鯵</span>
+      </header>
+      <main>
+        <div class="view-tools" aria-label="表示の設定">
+          <button
+            id="reset-view"
+            class="icon-button"
+            title="視点をリセット"
+            aria-label="視点をリセット"
+          >
+            <span data-icon="reset"></span>
+          </button>
+          <button
+            id="zoom-in"
+            class="icon-button"
+            title="拡大"
+            aria-label="拡大"
+          >
+            <span data-icon="plus"></span>
+          </button>
+          <button
+            id="zoom-out"
+            class="icon-button"
+            title="縮小"
+            aria-label="縮小"
+          >
+            <span data-icon="minus"></span>
+          </button>
+          <span class="tool-divider"></span>
+          <button
+            id="fullscreen"
+            class="icon-button"
+            title="全画面表示"
+            aria-label="全画面表示"
+          >
+            <span data-icon="expand"></span>
+          </button>
+          <button
+            id="school"
+            class="icon-button"
+            title="群れにする"
+            aria-label="群れにする"
+            aria-pressed="false"
+          >
+            <span data-icon="school"></span>
+          </button>
+          <button
+            id="feed"
+            class="icon-button"
+            title="オキアミをあげる"
+            aria-label="オキアミをあげる"
+          >
+            <span data-icon="shrimp"></span>
+          </button>
         </div>
-        <p class="species-description" id="species-description">
-          きらめく銀色の体と、すらりとした尾びれ。<br />体の横に並ぶ「ぜいご」が、アジの目じるし。
-        </p>
-        <div class="tags">
-          <span id="species-family">アジ科</span
-          ><span id="species-length">全長 約20–40 cm</span>
-        </div>
-      </section>
-      <section class="depth-control" aria-label="海の深さ">
-        <div class="depth-heading">
-          <label for="ocean-depth">水深</label>
-          <output id="depth-value" for="ocean-depth" aria-live="off">50 m</output>
-        </div>
-        <input id="ocean-depth" class="depth-range" type="range" min="50" max="150" step="50" value="50" aria-valuetext="50メートル" />
-      </section>
-    </main>
-    <div id="toast" role="status"></div>
-    <dialog id="collection-dialog" aria-label="図鑑"></dialog>
-    <div id="loading">
-      <span class="loading-fish">◌</span
-      ><span>小さな海を、準備しています。</span>
+        <section class="species-summary">
+          <p class="specimen-number" id="species-number">NO. 001</p>
+          <div class="species-name">
+            <h2 id="species-name">アジ</h2>
+            <span id="species-kanji">鯵</span>
+          </div>
+          <p class="species-description" id="species-description">
+            きらめく銀色の体と、すらりとした尾びれ。<br />体の横に並ぶ「ぜいご」が、アジの目じるし。
+          </p>
+          <div class="tags">
+            <span id="species-family">アジ科</span
+            ><span id="species-length">全長 約20–40 cm</span>
+          </div>
+        </section>
+        <section class="depth-control" aria-label="海の深さ">
+          <div class="depth-heading">
+            <label for="ocean-depth">水深</label>
+            <output id="depth-value" for="ocean-depth" aria-live="off"
+              >50 m</output
+            >
+          </div>
+          <input
+            id="ocean-depth"
+            class="depth-range"
+            type="range"
+            min="50"
+            max="150"
+            step="50"
+            value="50"
+            aria-valuetext="50メートル"
+          />
+        </section>
+      </main>
+      <div id="toast" role="status"></div>
+      <dialog id="collection-dialog" aria-label="図鑑"></dialog>
     </div>
-    <script type="module" src="/src/main.ts"></script>
+    <div id="loading" role="status" aria-live="polite" aria-busy="true">
+      <svg
+        class="loading-mark"
+        viewBox="0 0 62 34"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M5 17C17 3 32 3 43 17C32 31 17 31 5 17ZM43 17L56 7V27L43 17Z"
+          stroke="currentColor"
+          stroke-width="1.25"
+          stroke-linejoin="round"
+        />
+        <circle cx="17" cy="15" r="1.5" fill="currentColor" />
+      </svg>
+      <p id="loading-message">小さな海を、準備しています。</p>
+      <span class="loading-track" aria-hidden="true"></span>
+      <button id="loading-retry" type="button" hidden>再読み込み</button>
+      <noscript>水槽を表示するには、JavaScriptを有効にしてください。</noscript>
+    </div>
+    <script>
+      (() => {
+        const loading = document.getElementById("loading");
+        const message = document.getElementById("loading-message");
+        const retry = document.getElementById("loading-retry");
+        const showIssue = (failed) => {
+          loading.dataset.state = failed ? "error" : "slow";
+          loading.setAttribute("aria-busy", "false");
+          message.textContent = failed
+            ? "水槽を表示できませんでした。もう一度お試しください。"
+            : "読み込みに時間がかかっています。しばらく待つか、再読み込みしてください。";
+          retry.hidden = false;
+        };
+        const timeout = setTimeout(() => showIssue(false), 20000);
+        retry.addEventListener("click", () => location.reload());
+        window.addEventListener(
+          "aquarium:startup-error",
+          () => {
+            clearTimeout(timeout);
+            showIssue(true);
+          },
+          { once: true },
+        );
+        if (document.documentElement.dataset.startupError === "true") {
+          clearTimeout(timeout);
+          showIssue(true);
+        }
+        window.addEventListener(
+          "aquarium:ready",
+          () => {
+            clearTimeout(timeout);
+            const app = document.getElementById("app");
+            app.inert = false;
+            app.removeAttribute("aria-hidden");
+            loading.classList.add("loaded");
+            loading.setAttribute("aria-hidden", "true");
+            loading.setAttribute("aria-busy", "false");
+            loading.inert = true;
+            setTimeout(() => loading.remove(), 300);
+          },
+          { once: true },
+        );
+      })();
+    </script>
+    <script type="module" src="/src/bootstrap.ts"></script>
   </body>
 </html>

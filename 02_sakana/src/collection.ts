@@ -3,9 +3,32 @@ import * as THREE from "three";
 import { createFish } from "./fish/createFish";
 import type { FishSpecies } from "./fish/species";
 
-/** Capture the actual models once; the catalogue keeps no extra WebGL contexts. */
-function createThumbnails(entries: FishSpecies[]): Map<string, string> {
-  const thumbnails = new Map<string, string>();
+/** Let the modal paint and input handlers run between preview captures. */
+function afterPaint(signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const frame = requestAnimationFrame(() => {
+      timer = setTimeout(finish, 0);
+    });
+    signal.addEventListener("abort", finish, { once: true });
+  });
+}
+
+/** Capture models only on demand; dispose the single preview context afterwards. */
+async function createThumbnails(
+  entries: FishSpecies[],
+  onThumbnail: (id: string, source: string) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  await afterPaint(signal);
+  if (signal.aborted) return;
   let renderer: THREE.WebGLRenderer | undefined;
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -17,20 +40,38 @@ function createThumbnails(entries: FishSpecies[]): Map<string, string> {
     const scene = new THREE.Scene();
     scene.add(new THREE.AmbientLight("#ffffff", 3.5));
     const aspect = 720 / 400;
-    const camera = new THREE.OrthographicCamera(-3.1, 3.1, 3.1 / aspect, -3.1 / aspect, 0.1, 30);
+    const camera = new THREE.OrthographicCamera(
+      -3.1,
+      3.1,
+      3.1 / aspect,
+      -3.1 / aspect,
+      0.1,
+      30,
+    );
     camera.position.set(0.35, 0.06, 10);
     camera.lookAt(0.35, 0.06, 0);
 
     for (const entry of entries) {
-      const fish = createFish(entry);
+      await afterPaint(signal);
+      if (signal.aborted) break;
+      let fish: ReturnType<typeof createFish> | undefined;
       try {
+        fish = createFish(entry);
         scene.add(fish.group);
         fish.update(0);
         renderer.render(scene, camera);
-        thumbnails.set(entry.id, renderer.domElement.toDataURL("image/png"));
+        onThumbnail(entry.id, renderer.domElement.toDataURL("image/png"));
+      } catch (error) {
+        // A failed model preview must not prevent the other cards from loading.
+        console.warn(
+          `${entry.name}のプレビューを作成できませんでした。`,
+          error,
+        );
       } finally {
-        scene.remove(fish.group);
-        fish.dispose();
+        if (fish) {
+          scene.remove(fish.group);
+          fish.dispose();
+        }
       }
     }
   } catch (error) {
@@ -40,7 +81,6 @@ function createThumbnails(entries: FishSpecies[]): Map<string, string> {
     renderer?.dispose();
     renderer?.forceContextLoss();
   }
-  return thumbnails;
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(
@@ -58,25 +98,36 @@ export function createFishCollection(
   dialog: HTMLDialogElement,
   entries: FishSpecies[],
   onSelect: (entry: FishSpecies) => void,
-): { setSelected(id: string): void } {
+): {
+  setSelected(id: string): void;
+  prepare(): Promise<void>;
+  dispose(): void;
+} {
+  const events = new AbortController();
+  const listenerOptions = { signal: events.signal };
   const header = element("div", "catalogue-header");
   const heading = element("div", "catalogue-heading");
   const title = element("h2", "catalogue-title", "図鑑");
   title.id = "collection-title";
-  const count = element("span", "catalogue-count", `${String(entries.length).padStart(2, "0")} 種`);
+  const count = element(
+    "span",
+    "catalogue-count",
+    `${String(entries.length).padStart(2, "0")} 種`,
+  );
   heading.append(title, count);
 
   const close = element("button", "catalogue-close");
   close.type = "button";
   close.setAttribute("aria-label", "図鑑を閉じる");
   close.title = "閉じる";
-  close.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';
-  close.addEventListener("click", () => dialog.close());
+  close.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';
+  close.addEventListener("click", () => dialog.close(), listenerOptions);
   header.append(heading, close);
 
   const list = element("div", "catalogue-grid");
   list.id = "collection-list";
-  const thumbnails = createThumbnails(entries);
+  const placeholders = new Map<string, HTMLElement>();
   const buttons = entries.map((entry) => {
     const button = element("button", "catalogue-card");
     button.type = "button";
@@ -87,18 +138,9 @@ export function createFishCollection(
     preview.setAttribute("aria-hidden", "true");
     const number = element("span", "catalogue-number", entry.number);
     const selected = element("span", "catalogue-selected", "選択中");
-    const source = thumbnails.get(entry.id);
-    if (source) {
-      const image = element("img", "catalogue-image");
-      image.src = source;
-      image.alt = "";
-      image.width = 720;
-      image.height = 400;
-      image.draggable = false;
-      preview.append(image);
-    } else {
-      preview.append(element("span", "catalogue-placeholder", entry.kanji));
-    }
+    const placeholder = element("span", "catalogue-placeholder", entry.kanji);
+    placeholders.set(entry.id, placeholder);
+    preview.append(placeholder);
     preview.append(number, selected);
 
     const details = element("span", "catalogue-details");
@@ -114,11 +156,15 @@ export function createFishCollection(
     );
     details.append(nameRow, metadata);
     button.append(preview, details);
-    button.addEventListener("click", () => {
-      onSelect(entry);
-      setSelected(entry.id);
-      dialog.close();
-    });
+    button.addEventListener(
+      "click",
+      () => {
+        onSelect(entry);
+        setSelected(entry.id);
+        dialog.close();
+      },
+      listenerOptions,
+    );
     list.append(button);
     return button;
   });
@@ -134,5 +180,36 @@ export function createFishCollection(
       button.autofocus = selected;
     });
   }
-  return { setSelected };
+
+  let preparation: Promise<void> | undefined;
+  function prepare(): Promise<void> {
+    if (events.signal.aborted) return Promise.resolve();
+    // Keep the same job and captured images across close/reopen and selection.
+    preparation ??= createThumbnails(
+      entries,
+      (id, source) => {
+        const image = element("img", "catalogue-image");
+        image.src = source;
+        image.alt = "";
+        image.width = 720;
+        image.height = 400;
+        image.draggable = false;
+        image.decoding = "async";
+        placeholders.get(id)?.replaceWith(image);
+        placeholders.delete(id);
+      },
+      events.signal,
+    );
+    return preparation;
+  }
+
+  function dispose() {
+    if (events.signal.aborted) return;
+    events.abort();
+    dialog.close();
+    dialog.replaceChildren();
+    placeholders.clear();
+  }
+
+  return { setSelected, prepare, dispose };
 }

@@ -1,4 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500&family=Noto+Serif+JP:wght@400&display=swap");
 :root {
   font-family: "Noto Sans JP", sans-serif;
   color: #dce7e4;
@@ -12,6 +11,7 @@
   box-sizing: border-box;
 }
 body {
+  touch-action: pan-x pan-y;
   margin: 0;
   height: 100svh;
   min-height: 720px;
@@ -19,6 +19,7 @@ body {
   background: #0b2c36;
 }
 button {
+  touch-action: manipulation;
   font: inherit;
   cursor: pointer;
   color: inherit;
@@ -216,32 +217,6 @@ body[data-depth="50"] #feed:not(:disabled):hover {
 #toast.visible {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
-}
-#loading {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  background: #071e27;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 13px;
-  font-size: 12px;
-  letter-spacing: 2px;
-  transition: opacity 0.6s;
-}
-#loading.loaded {
-  opacity: 0;
-  pointer-events: none;
-}
-.loading-fish {
-  font-size: 28px;
-  animation: spin 2s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 @media (min-width: 1600px) {
   .species-summary {

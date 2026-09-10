@@ -1,319 +1,138 @@
 import "./style.css";
-import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { createFish, setFishMouthOpen, type FishInstance } from "./fish/createFish";
+import { createAquariumFish } from "./aquariumFish";
+import { createAquariumUI } from "./aquariumUI";
+import { createAquariumView } from "./aquariumView";
+import { getElement } from "./dom";
 import { species } from "./fish/species";
-import { initializeOceanDepth } from "./oceanDepth";
-import { createFishCollection } from "./collection";
-import { createFeeding, type FeedingActor } from "./feeding";
+import { createOceanEnvironment } from "./oceanEnvironment";
+import { createOceanParticles } from "./oceanParticles";
 
-import { initializeIcons, setButtonIcon } from "./icons";
+let disposeActiveAquarium: (() => void) | undefined;
 
-function getElement<T extends HTMLElement = HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
-  if (!element) throw new Error(`Required element not found: ${id}`);
-  return element as T;
-}
+/** Assemble the aquarium and own its frame loop and lifetime. */
+export async function startAquarium(): Promise<void> {
+  disposeActiveAquarium?.();
+  const events = new AbortController();
+  const cleanups: Array<() => void> = [];
+  let frame = 0;
+  let disposed = false;
+  let contextLost = false;
+  let elapsed = 0;
+  let previous = performance.now();
 
-initializeIcons();
-const toastElement = getElement("toast");
-let toastTimer: ReturnType<typeof setTimeout>;
-function toast(message: string) {
-  toastElement.textContent = message;
-  toastElement.classList.add("visible");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastElement.classList.remove("visible"), 2400);
-}
-
-function startAquarium() {
-  const container = getElement("aquarium");
-  const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    alpha: true,
-    powerPreference: "high-performance",
-  });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setClearColor(0x000000, 0);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.16;
-  container.appendChild(renderer.domElement);
-  renderer.domElement.setAttribute("aria-label", "銀色のアジが泳ぐ3Dビュー");
-  renderer.domElement.setAttribute("role", "img");
-  const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2("#0b2c36", 0.035);
-  initializeOceanDepth(scene.fog);
-  const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 70);
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.065;
-  controls.enablePan = false;
-  controls.minPolarAngle = 0.25;
-  controls.maxPolarAngle = Math.PI - 0.25;
-  controls.rotateSpeed = 0.55;
-  controls.zoomSpeed = 0.6;
-  // Uniform illumination keeps fish colors stable as they swim or the camera turns.
-  scene.add(new THREE.AmbientLight("#ffffff", 3.5));
-  let selectedSpecies = species.aji;
-  let fish = createFish(selectedSpecies);
-  scene.add(fish.group);
-  const speciesScale = fish.group.scale.clone();
-  const schoolOffsets = [
-    [-2.5, 1.5],
-    [1.5, 1.4],
-    [3.2, -1.5],
-    [-1.5, -1.3],
-    [2.4, 2.5],
-    [-3.1, 2.7],
-  ];
-  function createSchool(source: FishInstance, visible = false) {
-    return schoolOffsets.map((_, i) => {
-      const clone = source.group.clone(true);
-      clone.scale.multiplyScalar(0.4 + (i % 3) * 0.075);
-      clone.visible = visible;
-      scene.add(clone);
-      return clone;
-    });
-  }
-  let school = createSchool(fish);
-  const feeding = createFeeding(scene);
-  function createFeedingActors(): FeedingActor[] {
-    return [fish.group, ...school].map((group) => ({
-      group,
-      mouthPosition: fish.mouthPosition,
-      setMouthOpen: (amount) => setFishMouthOpen(group, amount),
-    }));
-  }
-  let feedingActors = createFeedingActors();
-
-  // Soft suspended particles give the water depth without an image or external model.
-  const particleCount = 230;
-  const particlePositions = new Float32Array(particleCount * 3),
-    sizes = new Float32Array(particleCount);
-  let seed = 7281;
-  function random() {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 4294967296;
-  }
-  for (let i = 0; i < particleCount; i++) {
-    particlePositions.set(
-      [(random() - 0.5) * 23, (random() - 0.5) * 15, (random() - 0.5) * 15 - 4],
-      i * 3,
-    );
-    sizes[i] = random() * 2.2 + 0.6;
-  }
-  const particlesGeometry = new THREE.BufferGeometry();
-  particlesGeometry.setAttribute(
-    "position",
-    new THREE.BufferAttribute(particlePositions, 3),
-  );
-  particlesGeometry.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
-  const particlesMaterial = new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    uniforms: {
-      uTime: { value: 0 },
-      uPixelRatio: { value: renderer.getPixelRatio() },
-    },
-    vertexShader: `attribute float aSize; uniform float uTime; uniform float uPixelRatio; varying float vAlpha;
-    void main(){vec3 p=position;p.y=mod(p.y+7.5+uTime*.045,15.0)-7.5;p.x+=sin(uTime*.12+p.y)*.14;vec4 mv=modelViewMatrix*vec4(p,1.0);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(aSize*uPixelRatio*9.0/-mv.z,1.0,5.0);vAlpha=.12+aSize*.08;}`,
-    fragmentShader: `varying float vAlpha;void main(){float d=length(gl_PointCoord-.5);float alpha=smoothstep(.5,.05,d)*vAlpha;gl_FragColor=vec4(.65,.84,.81,alpha);}`,
-  });
-  scene.add(new THREE.Points(particlesGeometry, particlesMaterial));
-  let baseDistance = 8;
-  const rest = new THREE.Vector3();
-  function resize() {
-    const width = container.clientWidth,
-      height = container.clientHeight;
-    const mobile = width <= 700;
-    camera.aspect = width / height;
-    const worldWidth = mobile ? 5.8 : width < 1100 ? 10.4 : 10.8;
-    baseDistance =
-      worldWidth /
-      (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
-    camera.position.set(0, 0.32, baseDistance);
-    controls.target.set(0, 0, 0);
-    controls.minDistance = baseDistance * 0.57;
-    controls.maxDistance = baseDistance * 1.6;
-    rest.set(mobile ? -0.3 : width < 1100 ? 0.65 : 0.8, mobile ? 1.1 : 0.05, 0);
-    fish.group.scale.copy(speciesScale).multiplyScalar(mobile ? 0.9 : 1.14);
-    camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
-    controls.update();
-  }
-  const resizeObserver = new ResizeObserver(resize);
-  resizeObserver.observe(container);
-  resize();
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  let schoolActive = false,
-    elapsed = 0,
-    previous = performance.now(),
-    frame = 0;
-  const entries = Object.values(species);
-  const collection = createFishCollection(dialog, entries, (entry) => {
-    if (entry.id === selectedSpecies.id) return;
-    feeding.reset();
-    // Replace the entire school before disposing its shared resources.
-    const nextFish = createFish(entry);
-    const nextSchool = createSchool(nextFish, schoolActive);
-    scene.remove(fish.group, ...school);
-    fish.dispose();
-    fish = nextFish;
-    school = nextSchool;
-    feedingActors = createFeedingActors();
-    selectedSpecies = entry;
-    speciesScale.copy(fish.group.scale);
-    scene.add(fish.group);
-    elapsed = 0;
-    fish.update(elapsed);
-    resize();
-    updateSpeciesSummary();
-  });
-  getElement("species-count").textContent = String(entries.length).padStart(2, "0");
-  function updateSpeciesSummary() {
-    getElement("species-number").textContent = `NO. ${selectedSpecies.number}`;
-    getElement("species-name").textContent = selectedSpecies.name;
-    getElement("species-kanji").textContent = selectedSpecies.kanji;
-    getElement("species-family").textContent = selectedSpecies.family;
-    getElement("species-length").textContent =
-      `全長 ${selectedSpecies.lengthLabel}`;
-    getElement("species-description").replaceChildren(
-      document.createTextNode(selectedSpecies.description[0]),
-      document.createElement("br"),
-      document.createTextNode(selectedSpecies.description[1]),
-    );
-    renderer.domElement.setAttribute(
-      "aria-label",
-      `${selectedSpecies.name}が泳ぐ3Dビュー`,
-    );
-    container.setAttribute(
-      "aria-label",
-      `泳ぐ${selectedSpecies.name}の3D水槽。ドラッグで回転、スクロールまたはピンチで拡大できます。`,
-    );
-    collection.setSelected(selectedSpecies.id);
-  }
-  updateSpeciesSummary();
-  const schoolButton = getElement<HTMLButtonElement>("school");
-  schoolButton.addEventListener("click", () => {
-    schoolActive = !schoolActive;
-    school.forEach((f) => (f.visible = schoolActive));
-    schoolButton.setAttribute("aria-pressed", String(schoolActive));
-    setButtonIcon(
-      schoolButton,
-      schoolActive ? "fish" : "school",
-      schoolActive ? "1匹に戻す" : "群れにする",
-    );
-  });
-  const feedButton = getElement<HTMLButtonElement>("feed");
-  feedButton.addEventListener("click", () => {
-    feeding.feed(feedingActors, camera);
-  });
-  function resetView() {
-    camera.position.set(0, 0.32, baseDistance);
-    controls.target.set(0, 0, 0);
-    controls.update();
-  }
-  getElement("reset-view").addEventListener("click", () => {
-    resetView();
-    toast("もとの視点に戻しました");
-  });
-  function zoom(factor: number) {
-    const offset = camera.position.clone().sub(controls.target);
-    offset.setLength(
-      THREE.MathUtils.clamp(
-        offset.length() * factor,
-        controls.minDistance,
-        controls.maxDistance,
-      ),
-    );
-    camera.position.copy(controls.target).add(offset);
-    controls.update();
-  }
-  getElement("zoom-in").addEventListener("click", () => zoom(0.85));
-  getElement("zoom-out").addEventListener("click", () => zoom(1.18));
-  const fullscreenButton = getElement<HTMLButtonElement>("fullscreen");
-  fullscreenButton.addEventListener("click", async () => {
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else if (document.documentElement.requestFullscreen)
-        await document.documentElement.requestFullscreen();
-      else toast("このブラウザでは全画面表示を利用できません");
-    } catch {
-      toast("全画面表示に切り替えられませんでした");
-    }
-  });
-  document.addEventListener("fullscreenchange", () => {
-    setButtonIcon(
-      fullscreenButton,
-      "expand",
-      document.fullscreenElement ? "全画面表示を終了" : "全画面表示",
-    );
-  });
-  function animate(now: number) {
-    const delta = Math.min((now - previous) / 1000, 0.05);
-    previous = now;
-    if (!reducedMotion.matches) elapsed += delta;
-    fish.update(elapsed);
-    fish.group.position.copy(rest);
-    fish.group.position.x += Math.sin(elapsed * 0.28) * 0.22;
-    fish.group.position.y += Math.sin(elapsed * 0.7) * 0.055;
-    fish.group.rotation.set(
-      Math.sin(elapsed * 0.65) * 0.025,
-      -0.13 + Math.sin(elapsed * 0.38) * 0.17,
-      Math.sin(elapsed * 0.53) * 0.015,
-    );
-    school.forEach((f, i) => {
-      f.position.set(
-        rest.x + schoolOffsets[i][0] + Math.sin(elapsed * 0.28 + i) * 0.16,
-        rest.y + schoolOffsets[i][1] + Math.sin(elapsed * 0.7 + i) * 0.12,
-        -2 - i * 0.6,
-      );
-      f.rotation.copy(fish.group.rotation);
-    });
-    // Explicit feeding remains available when ambient motion is reduced by the OS.
-    feeding.update(delta, feedingActors);
-    feedButton.disabled = !feeding.canFeed;
-    particlesMaterial.uniforms.uTime.value = elapsed;
-    controls.update();
-    renderer.render(scene, camera);
-    frame = requestAnimationFrame(animate);
-  }
-  frame = requestAnimationFrame(animate);
-  document.addEventListener("visibilitychange", () => {
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
     cancelAnimationFrame(frame);
-    if (!document.hidden) {
-      previous = performance.now();
+    events.abort();
+    cleanups.reverse().forEach((cleanup) => cleanup());
+    if (disposeActiveAquarium === dispose) disposeActiveAquarium = undefined;
+  }
+
+  try {
+    const container = getElement("aquarium");
+    const view = createAquariumView(container);
+    cleanups.push(view.dispose);
+    const environment = createOceanEnvironment(view.scene);
+    cleanups.push(environment.dispose);
+    const fish = createAquariumFish(view.scene, environment, species.aji);
+    cleanups.push(fish.dispose);
+    const particles = createOceanParticles(
+      view.scene,
+      view.renderer.getPixelRatio(),
+    );
+    cleanups.push(particles.dispose);
+
+    function resize() {
+      const { mobile } = view.resize(fish.schoolActive);
+      environment.resize(mobile);
+      fish.setLayout(mobile);
+    }
+
+    const ui = createAquariumUI(
+      container,
+      view.renderer.domElement,
+      Object.values(species),
+      fish.selectedSpecies,
+      {
+        selectSpecies(entry) {
+          if (!fish.selectSpecies(entry)) return;
+          elapsed = 0;
+          resize();
+          ui.setSpecies(fish.selectedSpecies);
+        },
+        toggleSchool() {
+          const active = fish.toggleSchool();
+          resize();
+          return active;
+        },
+        feed: () => {
+          fish.feed(view.camera);
+        },
+        resetView: view.reset,
+        zoom: view.zoom,
+        setDepth: environment.setDepth,
+      },
+    );
+    cleanups.push(ui.dispose);
+    const resizeObserver = new ResizeObserver(resize);
+    cleanups.push(() => resizeObserver.disconnect());
+    resizeObserver.observe(container);
+    resize();
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    function animate(now: number) {
+      if (disposed || contextLost) return;
+      const delta = Math.min((now - previous) / 1000, 0.05);
+      previous = now;
+      if (!reducedMotion.matches) elapsed += delta;
+      environment.update(elapsed, delta);
+      fish.update(delta, elapsed, reducedMotion.matches);
+      particles.update(elapsed);
+      ui.setCanFeed(fish.canFeed);
+      view.update();
+      view.render();
       frame = requestAnimationFrame(animate);
     }
-  });
-  renderer.domElement.addEventListener("webglcontextlost", (e) => {
-    e.preventDefault();
-    cancelAnimationFrame(frame);
-    feeding.reset();
-    feedButton.disabled = true;
-    toast("水槽の表示が中断されました。ページを再読み込みしてください。");
-  });
-  getElement("loading").classList.add("loaded");
-  getElement("loading").setAttribute("aria-hidden", "true");
+
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        cancelAnimationFrame(frame);
+        if (!document.hidden && !contextLost) {
+          previous = performance.now();
+          frame = requestAnimationFrame(animate);
+        }
+      },
+      { signal: events.signal },
+    );
+    view.renderer.domElement.addEventListener(
+      "webglcontextlost",
+      (event) => {
+        event.preventDefault();
+        contextLost = true;
+        cancelAnimationFrame(frame);
+        fish.resetFeeding();
+        ui.setCanFeed(false);
+        ui.notify(
+          "水槽の表示が中断されました。ページを再読み込みしてください。",
+        );
+      },
+      { signal: events.signal },
+    );
+
+    disposeActiveAquarium = dispose;
+    previous = performance.now();
+    // Draw and compile the first frame before the bootstrap removes the loader.
+    animate(previous);
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
+  } catch (error) {
+    dispose();
+    throw error;
+  }
 }
 
-const dialog = getElement<HTMLDialogElement>("collection-dialog");
-getElement("collection-open").addEventListener("click", () =>
-  dialog.showModal(),
-);
-dialog.addEventListener("click", (e) => {
-  const r = dialog.getBoundingClientRect();
-  if (
-    e.clientX < r.left ||
-    e.clientX > r.right ||
-    e.clientY < r.top ||
-    e.clientY > r.bottom
-  )
-    dialog.close();
-});
-try {
-  startAquarium();
-} catch (error) {
-  console.error(error);
-  getElement("loading").innerHTML =
-    '<div style="padding:32px;line-height:2;text-align:center">水槽を表示できませんでした。<br>WebGLに対応したブラウザで、もう一度お試しください。<br><button onclick="location.reload()" style="margin-top:20px;padding:10px 20px;border-radius:6px">再読み込み</button></div>';
-}
+// Release the previous scene and subscriptions during development reloads.
+import.meta.hot?.dispose(() => disposeActiveAquarium?.());
