@@ -10,7 +10,7 @@ export interface FishSpecies {
   lengthLabel: string;
   scientificName: string;
   family: string;
-  body: "carangid" | "clupeid" | "rockfish";
+  body: "carangid" | "clupeid" | "rockfish" | "scombrid";
   palette: {
     back: string;
     flank: string;

@@ -40,7 +40,7 @@ try {
       ].every(Number.isFinite),
       "Invalid swimming pose",
     );
-    assert.ok(pose.scale >= 0.6 && pose.scale <= 1.1, "Unexpected fish size");
+    near(pose.scale, 1, "Depth travel changed the physical fish size");
     assert.ok(Math.abs(pose.roll) <= 0.09, "Swimming bank is excessive");
     assert.ok(
       pose.position.x >= options.exit.x - 2 &&
@@ -54,7 +54,6 @@ try {
           (options.mobile ? 0.9 : 2),
       );
       assert.ok(Math.abs(pose.position.y - options.exit.y) <= 0.600001);
-      near(pose.scale, 1, "Cruising changed the physical fish size");
       assert.equal(pose.hidden, false);
     }
     if (pose.canFeed) {
@@ -140,6 +139,11 @@ try {
     let cruiseDuration = 0;
     let headingChange = 0;
     let stillRun = 0;
+    let visibleApproachFrames = 0;
+    let approachStillRun = 0;
+    const approachActor = new THREE.Object3D();
+    const approachTravel = new THREE.Vector3();
+    const approachForward = new THREE.Vector3();
     const initialHeading = pose.yaw;
     // More than three minutes catches repeated visits and permanent hiding regressions.
     for (let frame = 0; frame < 200 * 60; frame++) {
@@ -147,6 +151,44 @@ try {
       pose = motion.update(step, options);
       checkPose(pose, options);
       checkContinuity(before, pose);
+      // Inspect what is visible as the fish comes forward, including its actual
+      // rendered heading; a smooth position curve alone can still slide or spin.
+      if (
+        before.phase === "emerging" &&
+        pose.phase === "emerging" &&
+        Math.min(before.position.z, pose.position.z) > -4.5
+      ) {
+        visibleApproachFrames++;
+        const distance = before.position.distanceTo(pose.position);
+        assert.ok(distance / step <= 2.01, "The approaching fish rushed forward");
+        approachStillRun = distance < 1e-5 ? approachStillRun + step : 0;
+        assert.ok(
+          approachStillRun < 0.15,
+          "The approaching fish stopped before resuming its swim",
+        );
+        if (distance > 1e-5) {
+          approachTravel.copy(pose.position).sub(before.position).normalize();
+          approachActor.rotation.set(0, pose.yaw, pose.pitch, "YXZ");
+          approachActor.rotateX(pose.roll);
+          approachForward.set(-1, 0, 0).applyQuaternion(approachActor.quaternion);
+          assert.ok(
+            approachForward.dot(approachTravel) > 0.995,
+            "The approaching fish slid instead of facing its travel",
+          );
+        } else {
+          assert.ok(
+            angleDistance(before.yaw, pose.yaw) < 0.001 &&
+              Math.abs(before.pitch - pose.pitch) < 0.001,
+            "The approaching fish rotated in place",
+          );
+          assert.ok(
+            Math.abs(before.scale - pose.scale) < 1e-5,
+            "The approaching fish enlarged in place",
+          );
+        }
+      } else {
+        approachStillRun = 0;
+      }
       if (frame < 20 * 60)
         assert.equal(pose.phase, "cruising", "Fish hid soon after loading");
       if (pose.phase === "cruising") {
@@ -197,6 +239,10 @@ try {
       visits >= 3 && exits >= visits - 1,
       "Rock visits did not resume swimming",
     );
+    assert.ok(
+      visibleApproachFrames > 60,
+      "Visible depth approaches were not exercised",
+    );
 
     // Check actual travelled distance and rendered orientation, not parameter speed.
     motion.reset();
@@ -234,6 +280,15 @@ try {
       }
     }
     assert.ok(maximumBank > 0.02, "Turns did not produce a swimming bank");
+
+    // Feeding immediately after startup must not create a near-zero U-turn.
+    for (const delay of [1 / 60, 0.1, 0.5, 1, 3]) {
+      motion.reset();
+      advance(motion, delay, options);
+      motion.reveal();
+      pose = advance(motion, 6, { ...options, feeding: true });
+      assert.equal(pose.canFeed, true, "Early feeding did not settle");
+    }
 
     for (const phase of [
       "cruising",
@@ -293,7 +348,7 @@ try {
     assert.ok(options.exit.equals(initialExit));
   }
   console.log(
-    "Shelter motion: depth-aware constant-size desktop/mobile swimming, controlled speed, tangent heading/bank, brief rock visits, smooth feeding recall and reduced motion passed.",
+    "Shelter motion: depth-aware desktop/mobile swimming, controlled approach speed, travel-aligned emergence, no in-place approach turns/resizing, brief rock visits, smooth feeding recall and reduced motion passed.",
   );
 } finally {
   await server.close();

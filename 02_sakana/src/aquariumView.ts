@@ -35,7 +35,6 @@ export function createAquariumView(container: HTMLElement) {
   controls.zoomSpeed = 0.6;
 
   const viewTarget = new THREE.Vector3();
-  let baseDistance = 8;
   let mobile = false;
   let disposed = false;
 
@@ -52,7 +51,7 @@ export function createAquariumView(container: HTMLElement) {
       // Leave vertical room for the near side of the deeper circuits on wide screens.
       schoolActive ? camera.aspect * 6.4 : 0,
     );
-    baseDistance =
+    const baseDistance =
       worldWidth /
       (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
     if (schoolActive) {
@@ -79,17 +78,6 @@ export function createAquariumView(container: HTMLElement) {
     renderer.setSize(width, height);
     controls.update();
     return { mobile, layoutChanged };
-  }
-
-  function reset() {
-    if (disposed) return;
-    camera.position.set(
-      viewTarget.x,
-      viewTarget.y + 0.32,
-      viewTarget.z + baseDistance,
-    );
-    controls.target.copy(viewTarget);
-    controls.update();
   }
 
   function zoom(factor: number) {
@@ -131,7 +119,6 @@ export function createAquariumView(container: HTMLElement) {
       return mobile;
     },
     resize,
-    reset,
     zoom,
     update,
     render,

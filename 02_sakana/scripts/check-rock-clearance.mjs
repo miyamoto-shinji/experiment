@@ -290,7 +290,9 @@ try {
             recalled = true;
           }
           // Single-fish mode keeps the original full-size shelter feature.
-          if (frame % 6 === 0) {
+          const sampleInterval =
+            pose.phase === "emerging" || pose.phase === "returning" ? 2 : 6;
+          if (frame % sampleInterval === 0) {
             actor.scale
               .copy(speciesScale)
               .multiplyScalar((mobile ? 0.8 : 1.14) * pose.scale);
@@ -304,6 +306,7 @@ try {
               spec,
               time,
               solids,
+              true,
             );
             if (contact) {
               contacts.push({

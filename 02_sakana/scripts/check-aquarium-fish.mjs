@@ -108,6 +108,12 @@ try {
         if (group.getObjectByName("fish-lower-jaw").rotation.z > 0.1)
           open.add(group);
       }
+      for (const group of fishGroups().filter((group) => !group.visible)) {
+        assert.ok(
+          Math.abs(group.getObjectByName("fish-lower-jaw").rotation.z) < 1e-8,
+          "A hidden clone opened its mouth while the solo fish ate",
+        );
+      }
     }
     return open;
   }
@@ -276,6 +282,45 @@ try {
   aquarium.toggleSchool();
   layout(true);
   aquarium.update(0, elapsed, true);
+  aquarium.feed(camera);
+  const replacedGroups = fishGroups();
+  const verifyReplacedResources = watchResources(replacedGroups);
+  assert.ok(foods().length > 0);
+  assert.equal(aquarium.selectSpecies(species.katsuo), true);
+  assert.equal(aquarium.selectedSpecies, species.katsuo);
+  assert.equal(aquarium.schoolActive, true);
+  assert.equal(fishGroups().length, 5);
+  assert.equal(visibleFish().length, 5);
+  assert.equal(foods().length, 0, "Species replacement retained old food");
+  assert.ok(replacedGroups.every((group) => group.parent === null));
+  verifyReplacedResources();
+  const katsuoScale = fishGroups().reduce(
+    (largest, group) =>
+      group.scale.x > largest.x ? group.scale.clone() : largest,
+    new THREE.Vector3(),
+  );
+  elapsed = 0;
+  layout(true);
+  aquarium.update(0, elapsed, true);
+  assert.equal(aquarium.feed(camera), true);
+  assert.equal(advance(16).size, 5, "Some replacement school fish did not eat");
+  assert.equal(foods().length, 0, "Replacement school feeding did not finish");
+
+  assert.equal(aquarium.toggleSchool(), false);
+  layout(true);
+  aquarium.update(0, elapsed, true);
+  assert.equal(visibleFish().length, 1);
+  assert.ok(
+    visibleFish()[0].scale.equals(katsuoScale.clone().multiplyScalar(0.8)),
+    "Replacement retained the previous species scale",
+  );
+  assert.equal(aquarium.feed(camera), true);
+  assert.equal(advance(16).size, 1, "The replacement solo fish did not eat");
+  assert.equal(foods().length, 0, "Replacement solo feeding did not finish");
+  assert.equal(aquarium.toggleSchool(), true);
+  layout(true);
+  aquarium.update(0, elapsed, true);
+  assert.equal(visibleFish().length, 5);
   aquarium.feed(camera);
   const finalGroups = fishGroups();
   const verifyFinalResources = watchResources(finalGroups);

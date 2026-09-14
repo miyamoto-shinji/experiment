@@ -30,9 +30,7 @@
         background: #071e27;
         color: #dce7e4;
         text-align: center;
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
-          "Yu Gothic", sans-serif;
+        font-family: "Gen Interface JP", sans-serif;
         transition: opacity 280ms ease;
       }
       #loading.loaded {
@@ -128,18 +126,17 @@
         true,
       );
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500&family=Noto+Serif+JP:wght@400&display=swap"
+      href="https://cdn.jsdelivr.net/npm/gen-interface-jp@0.8.0/cdn/400.css"
       media="print"
       onload="this.media = 'all'"
     />
     <meta name="theme-color" content="#071e27" />
     <meta
       name="description"
-      content="小さな海を、ブラウザのなかに。アジ・イワシ・カサゴを360度から観察し、餌やりも楽しめる3Dの水族館。"
+      content="小さな海を、ブラウザのなかに。アジ・イワシ・カサゴ・カツオを360度から観察し、餌やりも楽しめる3Dの水族館。"
     />
     <title>SAKANA — 小さな海を、ブラウザのなかに。</title>
     <link
@@ -159,20 +156,12 @@
           <span data-icon="grid"></span>図鑑<span
             class="count"
             id="species-count"
-            >03</span
+            >04</span
           >
         </button>
       </header>
       <main>
         <div class="view-tools" aria-label="表示の設定">
-          <button
-            id="reset-view"
-            class="icon-button"
-            title="視点をリセット"
-            aria-label="視点をリセット"
-          >
-            <span data-icon="reset"></span>
-          </button>
           <button
             id="zoom-in"
             class="icon-button"
@@ -215,6 +204,18 @@
           >
             <span data-icon="shrimp"></span>
           </button>
+          <button
+            id="ocean-depth"
+            class="icon-button depth-button"
+            type="button"
+            title="水深50m。100mに変更"
+            aria-label="水深50m。100mに変更"
+          >
+            <span data-icon="droplet"></span>
+            <span id="depth-value" class="depth-value" aria-hidden="true"
+              >50m</span
+            >
+          </button>
         </div>
         <section class="species-summary">
           <p class="specimen-number" id="species-number">NO. 001</p>
@@ -229,24 +230,6 @@
             <span id="species-family">アジ科</span
             ><span id="species-length">全長 約20–40 cm</span>
           </div>
-        </section>
-        <section class="depth-control" aria-label="海の深さ">
-          <div class="depth-heading">
-            <label for="ocean-depth">水深</label>
-            <output id="depth-value" for="ocean-depth" aria-live="off"
-              >50 m</output
-            >
-          </div>
-          <input
-            id="ocean-depth"
-            class="depth-range"
-            type="range"
-            min="50"
-            max="150"
-            step="50"
-            value="50"
-            aria-valuetext="50メートル"
-          />
         </section>
       </main>
       <div id="toast" role="status"></div>

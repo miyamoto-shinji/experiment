@@ -10,7 +10,12 @@ export interface ShelterOptions {
 }
 
 export type SwimPhase =
-  "cruising" | "visiting" | "hidden" | "emerging" | "returning" | "feeding";
+  | "cruising"
+  | "visiting"
+  | "hidden"
+  | "emerging"
+  | "returning"
+  | "feeding";
 
 export interface ShelterPose {
   position: THREE.Vector3;
@@ -23,13 +28,12 @@ export interface ShelterPose {
   phase: SwimPhase;
 }
 
-const HIDDEN_SCALE = 0.65;
 const VISIT_AFTER = 42;
 const HIDDEN_SECONDS = 0.8;
 const RETURN_SECONDS = 5.4;
+const EMERGE_SECONDS = 14;
 const ease = (value: number) => value * value * (3 - 2 * value);
-const wrapAngle = (angle: number) =>
-  Math.atan2(Math.sin(angle), Math.cos(angle));
+const wrapAngle = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
 /** Continuous swimming with brief rock visits and an interruptible feeding rendezvous. */
 export function createShelterMotion() {
@@ -51,10 +55,11 @@ export function createShelterMotion() {
     yawTo: number;
     pitchFrom: number;
     pitchTo: number;
-    scaleFrom: number;
-    scaleTo: number;
     duration: number;
     stage: Stage;
+    curve?: THREE.CubicBezierCurve3;
+    progress?: number[];
+    effort?: number;
   }
   const direction = new THREE.Vector3();
   const approach = new THREE.Vector3();
@@ -119,13 +124,11 @@ export function createShelterMotion() {
     let cursor = pose.position.clone();
     let yaw = pose.yaw,
       pitch = pose.pitch;
-    let scale = pose.scale;
 
     function add(
       to: THREE.Vector3,
       nextYaw: number,
       nextPitch: number,
-      nextScale: number,
       seconds: number,
       stage: Stage,
     ) {
@@ -137,15 +140,12 @@ export function createShelterMotion() {
         yawTo: continuousYaw,
         pitchFrom: pitch,
         pitchTo: nextPitch,
-        scaleFrom: scale,
-        scaleTo: nextScale,
         duration: Math.max(0.03, seconds),
         stage,
       });
       cursor.copy(to);
       yaw = continuousYaw;
       pitch = nextPitch;
-      scale = nextScale;
     }
 
     function turn(nextYaw: number, nextPitch: number, stage: Stage) {
@@ -153,27 +153,82 @@ export function createShelterMotion() {
         Math.abs(wrapAngle(nextYaw - yaw)) / 2.4,
         Math.abs(nextPitch - pitch) / 1.2,
       );
-      if (seconds > 0.001)
-        add(cursor, nextYaw, nextPitch, scale, seconds, stage);
+      if (seconds > 0.001) add(cursor, nextYaw, nextPitch, seconds, stage);
     }
 
-    function move(to: THREE.Vector3, stage: Stage, faceTravel = true) {
+    function move(to: THREE.Vector3, stage: Stage) {
       direction.copy(to).sub(cursor);
       const distance = direction.length();
       if (distance < 0.00001) return;
       direction.divideScalar(distance);
-      if (faceTravel)
-        turn(
-          Math.atan2(direction.z, -direction.x),
-          THREE.MathUtils.clamp(-Math.asin(direction.y), -0.4, 0.4),
-          stage,
+      turn(
+        Math.atan2(direction.z, -direction.x),
+        THREE.MathUtils.clamp(-Math.asin(direction.y), -0.4, 0.4),
+        stage,
+      );
+      add(to, yaw, pitch, distance / 4.5, stage);
+    }
+
+    function arrive(fromPassage: boolean) {
+      const distance = cursor.distanceTo(options.exit);
+      // Sub-pixel drift at startup needs no U-turn around a near-zero curve.
+      if (distance < 0.001) {
+        turn(0, 0, "settling");
+        return;
+      }
+      // Face out of the passage while still behind the rocks. The final arc
+      // bends into the next swimming heading without a stop-and-pivot at the front.
+      if (fromPassage) turn(Math.PI / 2, 0, "corridor");
+      const forward = new THREE.Vector3(
+        -Math.cos(yaw) * Math.cos(pitch),
+        -Math.sin(pitch),
+        Math.sin(yaw) * Math.cos(pitch),
+      );
+      const handle = Math.min(distance * 0.45, fromPassage ? 3.4 : 0.45);
+      const controlA = cursor.clone().addScaledVector(forward, handle);
+      const controlB = options.exit.clone();
+      controlB.x += Math.min(options.mobile ? 0.55 : 0.8, distance * 0.6);
+      const curve = new THREE.CubicBezierCurve3(
+        cursor.clone(),
+        controlA,
+        controlB,
+        options.exit.clone(),
+      );
+      curve.arcLengthDivisions = 240;
+      add(options.exit, 0, 0, curve.getLength() / 4.5, "outward");
+      const step = steps[steps.length - 1];
+      step.curve = curve;
+      // Give tight turns more time rather than letting the head lag behind
+      // the path. The fish keeps pointing where it actually swims.
+      const progress = [0];
+      const sample = new THREE.Vector3();
+      const previous = curve.getPoint(0);
+      let previousYaw = yaw,
+        previousPitch = pitch;
+      for (let i = 1; i <= 240; i++) {
+        curve.getPoint(i / 240, sample);
+        curve.getTangent(i / 240, direction);
+        const sampleYaw = Math.atan2(direction.z, -direction.x);
+        const samplePitch = -Math.asin(
+          THREE.MathUtils.clamp(direction.y, -1, 1),
         );
-      add(to, yaw, pitch, scale, distance / 4.5, stage);
+        progress.push(
+          progress[i - 1] +
+            sample.distanceTo(previous) +
+            Math.abs(wrapAngle(sampleYaw - previousYaw)) * 1.3 +
+            Math.abs(samplePitch - previousPitch) * 0.8,
+        );
+        previous.copy(sample);
+        previousYaw = sampleYaw;
+        previousPitch = samplePitch;
+      }
+      const length = progress[progress.length - 1];
+      step.progress = progress.map((value) => value / length);
+      step.effort = length;
+      step.duration = length / 4.5;
     }
 
     if (phase === "visiting") {
-      // Shrink the visiting fish before it enters the narrow passage.
-      add(cursor, yaw, pitch, HIDDEN_SCALE, 0.65, "approach");
       move(front, "approach");
       move(gate, "inward");
       move(options.shelter, "corridor");
@@ -186,31 +241,33 @@ export function createShelterMotion() {
       if (wasInward) {
         // Never sweep the body sideways by making a U-turn between the banks.
         move(gate, "inward");
-        move(front, "outward");
+        arrive(true);
       } else if (behindBank) {
         move(gate, "corridor");
-        move(front, "outward");
+        arrive(true);
       } else if (inLane) {
-        move(front, "outward");
+        arrive(true);
       } else {
-        // Open-water recalls prepare before reaching the front staging point.
-        add(cursor, yaw, pitch, HIDDEN_SCALE, 0.4, "approach");
-        move(front, "approach");
+        arrive(false);
       }
-      turn(0, 0, "settling");
-      move(options.exit, "settling", false);
-      add(cursor, 0, 0, 1, 0.55, "settling");
     }
     const total = steps.reduce((sum, step) => sum + step.duration, 0);
-    const budget = phase === "visiting" ? 7.4 : RETURN_SECONDS;
+    const budget =
+      phase === "visiting" ? 7.4
+      : phase === "emerging" ? EMERGE_SECONDS
+      : RETURN_SECONDS;
     steps.forEach((step) => {
       step.duration *= budget / total;
+      if (phase === "emerging") {
+        // Smoothstep peaks at 1.5 times its average speed. Preserve a calm
+        // approach even when a longer rear-corridor route used more time.
+        const effort = step.effort ?? step.from.distanceTo(step.to);
+        step.duration = Math.max(step.duration, (effort * 1.5) / 1.8);
+      }
     });
   }
 
   function travel(delta: number, options: ShelterOptions) {
-    // Settle a swimming bank before the existing narrow-passage stages.
-    pose.roll *= Math.exp(-delta * 6);
     let remaining = delta;
     while (remaining > 1e-10 && stepIndex < steps.length) {
       const step = steps[stepIndex];
@@ -221,10 +278,39 @@ export function createShelterMotion() {
       stepTime += consumed;
       remaining -= consumed;
       const amount = ease(Math.min(1, stepTime / step.duration));
-      pose.position.lerpVectors(step.from, step.to, amount);
-      pose.yaw = THREE.MathUtils.lerp(step.yawFrom, step.yawTo, amount);
-      pose.pitch = THREE.MathUtils.lerp(step.pitchFrom, step.pitchTo, amount);
-      pose.scale = THREE.MathUtils.lerp(step.scaleFrom, step.scaleTo, amount);
+      if (step.curve) {
+        const progress = step.progress!;
+        let low = 0,
+          high = progress.length - 1;
+        while (high - low > 1) {
+          const middle = (low + high) >>> 1;
+          if (progress[middle] < amount) low = middle;
+          else high = middle;
+        }
+        const blend =
+          (amount - progress[low]) / (progress[high] - progress[low]);
+        const parameter = (low + blend) / (progress.length - 1);
+        step.curve.getPoint(parameter, pose.position);
+        step.curve.getTangent(parameter, direction).normalize();
+        const yaw = Math.atan2(direction.z, -direction.x);
+        const turn = wrapAngle(yaw - pose.yaw);
+        pose.yaw += turn;
+        pose.pitch = -Math.asin(THREE.MathUtils.clamp(direction.y, -1, 1));
+        const bank = THREE.MathUtils.clamp(
+          consumed > 0 ? (-turn / consumed) * 0.08 : 0,
+          -0.09,
+          0.09,
+        );
+        pose.roll =
+          THREE.MathUtils.lerp(pose.roll, bank, 1 - Math.exp(-consumed * 3)) *
+          (1 - THREE.MathUtils.smoothstep(amount, 0.85, 1));
+      } else {
+        // The tight passage corners are turned upright behind the rock bank.
+        pose.roll *= Math.exp(-consumed * 6);
+        pose.position.lerpVectors(step.from, step.to, amount);
+        pose.yaw = THREE.MathUtils.lerp(step.yawFrom, step.yawTo, amount);
+        pose.pitch = THREE.MathUtils.lerp(step.pitchFrom, step.pitchTo, amount);
+      }
       if (stepTime >= step.duration) {
         pose.position.copy(step.to);
         stepTime = 0;

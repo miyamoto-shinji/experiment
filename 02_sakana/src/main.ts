@@ -72,7 +72,6 @@ export async function startAquarium(): Promise<void> {
         feed: () => {
           fish.feed(view.camera);
         },
-        resetView: view.reset,
         zoom: view.zoom,
         setDepth: environment.setDepth,
       },

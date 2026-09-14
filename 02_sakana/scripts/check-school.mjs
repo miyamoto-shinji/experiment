@@ -177,6 +177,21 @@ try {
           Math.abs(pose.roll - previous[index].roll) < 0.015,
           `${label}: banking snapped`,
         );
+        if (label === "feeding return") {
+          velocity.copy(pose.position).sub(previous[index].position);
+          if (velocity.lengthSq() > 1e-12) {
+            velocity.normalize();
+            quaternion.setFromEuler(euler.set(0, pose.yaw, pose.pitch));
+            quaternion.multiply(
+              bankQuaternion.setFromAxisAngle(longitudinalAxis, pose.roll),
+            );
+            forward.set(-1, 0, 0).applyQuaternion(quaternion);
+            assert.ok(
+              forward.dot(velocity) > 0.99,
+              `${label}/${frame}/${index}: fish slid sideways or backward`,
+            );
+          }
+        }
       });
       previous = snapshot(poses);
     }
@@ -329,7 +344,7 @@ try {
     );
     assert.ok(options.exit.equals(untouchedExit));
 
-    for (const start of [5, 19, 43]) {
+    for (const start of [0, 0.0167, 0.1, 3, 5, 8, 12, 18, 19, 24, 27.5, 43]) {
       motion.reset();
       advance(motion, start, options, "before feeding");
       const before = snapshot(reused);
@@ -385,7 +400,7 @@ try {
     checkBodies(poses, "resized");
   }
   console.log(
-    "School motion: five deep-water circuits, steady world speeds, tangent headings, smooth banks, rolled-body OBB clearance and personal feeding returns passed.",
+    "School motion: five deep-water circuits, steady world speeds, tangent headings, smooth banks, rolled-body OBB clearance and travel-aligned personal feeding returns passed.",
   );
 } finally {
   await server.close();

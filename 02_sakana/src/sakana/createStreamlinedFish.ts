@@ -7,6 +7,12 @@ import { setFishMouthOpen, type FishInstance } from "./fishModel";
 
 type Point = [number, number, number];
 
+interface FinAppearance {
+  color?: string;
+  edge?: string;
+  segments?: number;
+}
+
 type BodyFinBuilder = (
   start: number,
   end: number,
@@ -14,6 +20,13 @@ type BodyFinBuilder = (
   peak: number,
   rays: number,
   angle?: number,
+  appearance?: FinAppearance,
+) => void;
+type RibbonFinBuilder = (
+  base: Point[],
+  edge: Point[],
+  rays: number,
+  scallop?: number,
 ) => void;
 type SurfaceDiscBuilder = (
   ex: number,
@@ -28,6 +41,20 @@ type SurfaceDiscBuilder = (
 export interface StreamlinedFishFeatures {
   bodyFins: (bodyFin: BodyFinBuilder) => void;
   pelvicFin: (bodyFin: BodyFinBuilder, side: number) => void;
+  skinBands?: [number, string][];
+  paintSkin?: (context: CanvasRenderingContext2D) => void;
+  eyeScale?: number;
+  irisColor?: string;
+  shoulderSpot?: boolean;
+  tailLobe?: (
+    ribbonFin: RibbonFinBuilder,
+    tailPoint: (x: number, y: number) => Point,
+  ) => void;
+  pectoralFin?: (context: {
+    side: number;
+    surface: typeof surface;
+    ribbonFin: RibbonFinBuilder;
+  }) => void;
   sideMarkings?: (context: {
     spec: FishSpecies;
     section: typeof section;
@@ -95,14 +122,14 @@ function surface(x: number, y: number, side: number, offset = 0.008): Point {
   ];
 }
 
-function skinTexture(spec: FishSpecies) {
+function skinTexture(spec: FishSpecies, features: StreamlinedFishFeatures) {
   const canvas = document.createElement("canvas");
   canvas.width = 1024;
   canvas.height = 512;
   const ctx = canvas.getContext("2d")!;
   const gradient = ctx.createLinearGradient(0, 0, 0, 512);
   // Mirrored bands wrap around the entire fish, including the far side.
-  const stops: [number, string][] = [
+  const stops: [number, string][] = features.skinBands ?? [
     [0, spec.palette.back],
     [0.09, spec.palette.back],
     [0.19, spec.palette.flank],
@@ -169,6 +196,7 @@ function skinTexture(spec: FishSpecies) {
       ctx.fill();
     }
   }
+  features.paintSkin?.(ctx);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
@@ -297,7 +325,7 @@ export function createStreamlinedFish(
     group.add(object);
     return object;
   }
-  const texture = skinTexture(spec);
+  const texture = skinTexture(spec, features);
   const skin = animated(
     new THREE.MeshPhysicalMaterial({ map: texture, ...style.surface }),
   );
@@ -341,7 +369,7 @@ export function createStreamlinedFish(
   );
   const iris = animated(
     new THREE.MeshPhysicalMaterial({
-      color: style.details.iris,
+      color: features.irisColor ?? style.details.iris,
       vertexColors: true,
       roughness: 0.27,
       clearcoat: 0.8,
@@ -414,14 +442,15 @@ export function createStreamlinedFish(
     point: (t: number, v: number) => THREE.Vector3,
     rays: number,
     rayRadius = 0.003,
+    appearance: FinAppearance = {},
   ) {
     const positions: number[] = [],
       uvs: number[] = [],
       colors: number[] = [],
       indices: number[] = [];
-    const finColor = new THREE.Color(spec.palette.fin);
-    const finEdge = new THREE.Color(spec.palette.finEdge);
-    const along = 192,
+    const finColor = new THREE.Color(appearance.color ?? spec.palette.fin);
+    const finEdge = new THREE.Color(appearance.edge ?? spec.palette.finEdge);
+    const along = appearance.segments ?? 192,
       across = 10;
     for (let i = 0; i <= along; i++)
       for (let j = 0; j <= across; j++) {
@@ -492,6 +521,7 @@ export function createStreamlinedFish(
     peak: number,
     rays: number,
     angle = 0,
+    appearance?: FinAppearance,
   ) {
     const rise = 1.35,
       fall = (rise * (1 - peak)) / peak;
@@ -516,11 +546,12 @@ export function createStreamlinedFish(
       },
       rays,
       0.0025,
+      appearance,
     );
   }
   features.bodyFins(bodyFin);
 
-  // Two rounded, tapered lobes form a deeply forked golden tail.
+  // Species can refine the silhouette while sharing the tail's seated roots.
   for (const sign of [-1, 1]) {
     const tailScale = spec.shape.tailSize;
     const tailPoint = (x: number, y: number): Point => [
@@ -528,37 +559,43 @@ export function createStreamlinedFish(
       y * tailScale * sign,
       0,
     ];
-    ribbonFin(
-      [tailPoint(1.73, -0.025), tailPoint(1.88, -0.02), tailPoint(2.13, 0)],
-      [
-        tailPoint(1.73, 0.025),
-        tailPoint(2.14, 0.45),
-        tailPoint(2.72, 0.88),
-        tailPoint(2.48, 0.44),
-        tailPoint(2.13, 0),
-      ],
-      10,
-      0.004,
-    );
+    if (features.tailLobe) {
+      features.tailLobe(ribbonFin, tailPoint);
+    } else
+      ribbonFin(
+        [tailPoint(1.73, -0.025), tailPoint(1.88, -0.02), tailPoint(2.13, 0)],
+        [
+          tailPoint(1.73, 0.025),
+          tailPoint(2.14, 0.45),
+          tailPoint(2.72, 0.88),
+          tailPoint(2.48, 0.44),
+          tailPoint(2.13, 0),
+        ],
+        10,
+        0.004,
+      );
   }
   for (const side of [-1, 1]) {
     // Pectoral fins angle outward so they remain legible from the front and above.
-    ribbonFin(
-      [
-        [-0.84, -0.07, 0.326 * side],
-        [-0.78, -0.14, 0.337 * side],
-        [-0.7, -0.28, 0.31 * side],
-      ],
-      [
-        [-0.84, -0.07, 0.326 * side],
-        [-0.3, 0.065, 0.48 * side],
-        [0.16, 0.055, 0.55 * side],
-        [-0.23, -0.26, 0.53 * side],
-        [-0.7, -0.28, 0.31 * side],
-      ],
-      9,
-      0.015,
-    );
+    if (features.pectoralFin) {
+      features.pectoralFin({ side, surface, ribbonFin });
+    } else
+      ribbonFin(
+        [
+          [-0.84, -0.07, 0.326 * side],
+          [-0.78, -0.14, 0.337 * side],
+          [-0.7, -0.28, 0.31 * side],
+        ],
+        [
+          [-0.84, -0.07, 0.326 * side],
+          [-0.3, 0.065, 0.48 * side],
+          [0.16, 0.055, 0.55 * side],
+          [-0.23, -0.26, 0.53 * side],
+          [-0.7, -0.28, 0.31 * side],
+        ],
+        9,
+        0.015,
+      );
     features.pelvicFin(bodyFin, side);
 
     // The operculum is outlined in silver, with a small dark shoulder marking.
@@ -584,8 +621,10 @@ export function createStreamlinedFish(
       [-1.2, 0.27],
     ].map(([x, y]) => surface(x, y, side, 0.01));
     tube(cheek, 0.008, silver);
-    const spot = surface(-0.96, 0.25, side, 0.006);
-    ellipsoid(spot, [0.067, 0.113, 0.02], outline);
+    if (features.shoulderSpot !== false) {
+      const spot = surface(-0.96, 0.25, side, 0.006);
+      ellipsoid(spot, [0.067, 0.113, 0.02], outline);
+    }
 
     // Thin, surface-conforming eye layers avoid stacked discs projecting from the head.
     // All points are baked in fish coordinates and share the same swimming deformation.
@@ -663,7 +702,7 @@ export function createStreamlinedFish(
       dy: number,
       material: THREE.Material,
     ) {
-      const size = style.proportions.eyeScale;
+      const size = style.proportions.eyeScale * (features.eyeScale ?? 1);
       // Keep the eye round when the species has a longer, shallower body.
       const diameter = Math.min(spec.shape.length, spec.shape.height);
       const xScale = diameter / spec.shape.length;

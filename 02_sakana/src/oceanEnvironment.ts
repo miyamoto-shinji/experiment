@@ -49,8 +49,7 @@ export function createOceanEnvironment(scene: THREE.Scene) {
   };
   let currentDepth = 0,
     targetDepth = 0;
-  const time = { value: 0 },
-    depth = { value: 0 };
+  const depth = { value: 0 };
   const top = { value: new THREE.Color(palettes[0].top) };
   const water = { value: new THREE.Color(palettes[0].water) };
   const bottom = { value: new THREE.Color(palettes[0].bottom) };
@@ -68,20 +67,11 @@ export function createOceanEnvironment(scene: THREE.Scene) {
       uTop: top,
       uWater: water,
       uBottom: bottom,
-      uTime: time,
-      uDepth: depth,
     },
     vertexShader: `varying vec2 vUv; void main(){vUv=uv;gl_Position=vec4(position.xy,1.,1.);}`,
-    fragmentShader: `varying vec2 vUv; uniform vec3 uTop,uWater,uBottom; uniform float uTime,uDepth;
+    fragmentShader: `varying vec2 vUv; uniform vec3 uTop,uWater,uBottom;
     void main(){float y=vUv.y; vec3 c=mix(uBottom,uWater,smoothstep(0.,.6,y));
       c=mix(c,uTop,pow(smoothstep(.32,1.,y),1.65));
-      float beam=pow(max(0.,sin((vUv.x+(1.-y)*.17)*39.+sin(uTime*.09))),12.);
-      c+=vec3(.11,.24,.28)*beam*pow(y,1.3)*(1.-uDepth*.88)*.20;
-      vec2 surface=vec2(vUv.x*27.,(1.-y)*88.);
-      float wave=sin(surface.x+sin(surface.y+uTime*.22)*1.4)
-        +sin(surface.y*1.13+sin(surface.x*.8-uTime*.18));
-      float crest=pow(max(0.,1.-abs(wave)*1.6),8.);
-      c+=vec3(.30,.38,.39)*crest*smoothstep(.85,1.,y)*(1.-uDepth*.86)*.48;
       gl_FragColor=vec4(c,1.);
       #include <colorspace_fragment>
     }`,
@@ -94,7 +84,7 @@ export function createOceanEnvironment(scene: THREE.Scene) {
   background.renderOrder = -100;
   group.add(background);
 
-  group.add(createOceanSeabed({ time, depth, sand, water }));
+  group.add(createOceanSeabed({ depth, sand, water }));
   group.add(createOceanGravel({ depth, sand, water }));
   const rockMaterial = new THREE.MeshBasicMaterial({
     color: palettes[0].rock,
@@ -338,7 +328,7 @@ export function createOceanEnvironment(scene: THREE.Scene) {
   function update(timeSeconds: number, delta: number) {
     const dt = Number.isFinite(delta) ? Math.max(0, delta) : 0;
     currentDepth = THREE.MathUtils.damp(currentDepth, targetDepth, 3.5, dt);
-    time.value = Number.isFinite(timeSeconds) ? timeSeconds : 0;
+    const time = Number.isFinite(timeSeconds) ? timeSeconds : 0;
     depth.value = currentDepth;
     paint(top.value, "top");
     paint(water.value, "water");
@@ -352,7 +342,7 @@ export function createOceanEnvironment(scene: THREE.Scene) {
     fog.color.copy(water.value);
     fog.density = 0.015 + currentDepth * 0.008;
     for (const plant of plants) {
-      plant.group.rotation.z = Math.sin(time.value * 0.5 + plant.phase) * 0.06;
+      plant.group.rotation.z = Math.sin(time * 0.5 + plant.phase) * 0.06;
       plant.group.scale.y = 1 - currentDepth * 0.65;
     }
   }

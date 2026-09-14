@@ -8,7 +8,6 @@ interface AquariumActions {
   selectSpecies(species: FishSpecies): void;
   toggleSchool(): boolean;
   feed(): void;
-  resetView(): void;
   zoom(factor: number): void;
   setDepth(depth: number): void;
 }
@@ -113,14 +112,6 @@ export function createAquariumUI(
     listenerOptions,
   );
   feedButton.addEventListener("click", actions.feed, listenerOptions);
-  getElement("reset-view").addEventListener(
-    "click",
-    () => {
-      actions.resetView();
-      notify("もとの視点に戻しました");
-    },
-    listenerOptions,
-  );
   getElement("zoom-in").addEventListener(
     "click",
     () => actions.zoom(0.85),

@@ -1,5 +1,6 @@
 :root {
-  font-family: "Noto Sans JP", sans-serif;
+  --font-ui: "Gen Interface JP", sans-serif;
+  font-family: var(--font-ui);
   color: #dce7e4;
   background: #061b24;
   font-synthesis: none;
@@ -166,7 +167,6 @@ body[data-depth="50"] #feed:not(:disabled):hover {
   margin-top: 15px;
 }
 .species-name h2 {
-  font-family: "Noto Serif JP", serif;
   font-weight: 400;
   font-size: 30px;
   letter-spacing: 6px;
@@ -175,7 +175,6 @@ body[data-depth="50"] #feed:not(:disabled):hover {
 .species-name > span {
   border-left: 1px solid #516d704f;
   padding-left: 17px;
-  font-family: serif;
   font-size: 18px;
   color: #748f92;
 }
@@ -240,8 +239,7 @@ body[data-depth="50"] #feed:not(:disabled):hover {
 }
 @media (max-width: 700px) {
   body {
-    min-height: 760px;
-    overflow-y: auto;
+    min-height: 0;
   }
   .header {
     height: 83px;
@@ -251,18 +249,15 @@ body[data-depth="50"] #feed:not(:disabled):hover {
   .collection-button {
     font-size: 10px;
     gap: 7px;
-    pointer-events: auto;
   }
   .collection-button .count {
     display: none;
   }
-  main,
   #aquarium {
-    height: max(100svh, 760px);
+    height: 100svh;
   }
   .view-tools {
     right: 16px;
-    top: 32%;
     gap: 2px;
   }
   .view-tools .icon-button {
@@ -271,7 +266,8 @@ body[data-depth="50"] #feed:not(:disabled):hover {
   }
   .species-summary {
     left: 28px;
-    bottom: 220px;
+    bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+    max-width: calc(100% - 112px);
   }
   .specimen-number {
     font-size: 6px;

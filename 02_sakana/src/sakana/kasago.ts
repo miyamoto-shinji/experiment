@@ -24,7 +24,7 @@ export const kasagoSpecies: FishSpecies = {
     "赤茶色のまだら模様と、扇のような大きな胸びれ。",
     "背中に並ぶトゲが目じるしの、岩場にすむ魚。",
   ],
-  lengthLabel: "約30 cm",
+  lengthLabel: "約20cm〜30cm",
   scientificName: "Sebastiscus marmoratus",
   family: "メバル科",
   body: "rockfish",

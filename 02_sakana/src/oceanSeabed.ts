@@ -164,7 +164,6 @@ export function sampleSeabedSurfaceHeight(x: number, z: number): number {
 
 /** One watertight grid: dense around the fish, gradually coarser in distant fog. */
 export function createOceanSeabed(uniforms: {
-  time: { value: number };
   depth: { value: number };
   sand: { value: THREE.Color };
   water: { value: THREE.Color };
@@ -210,7 +209,6 @@ export function createOceanSeabed(uniforms: {
   const material = new THREE.ShaderMaterial({
     toneMapped: false,
     uniforms: {
-      uTime: uniforms.time,
       uDepth: uniforms.depth,
       uSand: uniforms.sand,
       uWater: uniforms.water,
@@ -233,7 +231,7 @@ export function createOceanSeabed(uniforms: {
       varying vec3 vWorld, vNormal;
       varying float vDistance, vCavity;
       uniform vec3 uSand, uWater;
-      uniform float uTime, uDepth;
+      uniform float uDepth;
 
       float hash(vec2 p) {
         return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -264,17 +262,6 @@ export function createOceanSeabed(uniforms: {
         float sediment = 1.0 + ripple + grain + mottling;
         float occlusion = 1.0 - vCavity * 0.78;
         vec3 color = uSand * relief * sediment * occlusion;
-
-        // Broad, moving refractions have soft edges instead of a bright wire grid.
-        float t = uTime * 0.11;
-        vec2 warped = p * 1.18;
-        warped += vec2(sin(p.y * 0.73 + t), cos(p.x * 0.66 - t * 0.8)) * 0.78;
-        float refractA = sin(warped.x + 1.2 * sin(warped.y * 0.84 + t));
-        float refractB = cos(warped.y * 0.83 + sin(warped.x * 0.72 - t));
-        float caustic = pow(0.5 + 0.5 * sin(refractA * 2.1 + refractB * 1.65), 3.0);
-        float causticFilter = exp(-length(fwidth(warped)) * 0.6);
-        color += uSand * caustic * causticFilter * 0.095
-               * pow(1.0 - uDepth, 3.0) * occlusion;
 
         float fog = 1.0 - exp(-vDistance * vDistance * (0.00045 + uDepth * 0.0006));
         color = mix(color, uWater, fog);
