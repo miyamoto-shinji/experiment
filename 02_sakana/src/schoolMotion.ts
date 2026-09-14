@@ -11,7 +11,11 @@ export const SCHOOL_MEMBERS = [
 const phases = [0, 1.1, 2.4, 3.6, 4.9];
 const widths = [2.55, 2.62, 2.5, 2.58, 2.54];
 const mobileWidths = [1.2, 1.3, 1.16, 1.28, 1.22];
-const DEPTH_RADIUS = 0.3;
+// The two rear feeding slots need an extra gap for the rockfish's broad fins.
+const mobileHeights = [0.98, 1.8, 2.62, 3.88, 4.7];
+const DEPTH_CENTER = 6.4;
+const depthRadii = [1.62, 1.72, 1.65, 1.7, 1.62];
+const swimSpeeds = [0.48, 0.53, 0.57, 0.51, 0.55];
 const RETURN_SECONDS = 3;
 const TURN_SECONDS = 1.6;
 const HOLD_SECONDS = 2;
@@ -39,17 +43,19 @@ function routePoint(
   direction?: THREE.Vector3,
 ) {
   const width = (mobile ? mobileWidths : widths)[index];
-  const rise = mobile ? 0.18 : 0.16;
-  const height = mobile ? 1.2 + index * 0.75 : -0.93 + index * 0.65;
+  const rise = mobile ? 0.22 : 0.2;
+  const height = mobile ? mobileHeights[index] : -1.24 + index * 0.84;
+  const depthRadius = depthRadii[index];
   destination.set(
     width * Math.sin(phase),
-    height + rise * Math.sin(phase),
-    (index % 2 ? 6.7 : 5.3) + DEPTH_RADIUS * Math.cos(phase),
+    height +
+      rise * (0.8 * Math.sin(phase) + 0.1 * Math.sin(2 * phase + index * 0.7)),
+    DEPTH_CENTER + depthRadius * Math.cos(phase),
   );
   direction?.set(
     width * Math.cos(phase),
-    rise * Math.cos(phase),
-    -DEPTH_RADIUS * Math.sin(phase),
+    rise * (0.8 * Math.cos(phase) + 0.2 * Math.cos(2 * phase + index * 0.7)),
+    -depthRadius * Math.sin(phase),
   );
   return destination;
 }
@@ -75,6 +81,7 @@ export interface SchoolPose {
   position: THREE.Vector3;
   yaw: number;
   pitch: number;
+  roll: number;
   scale: number;
   canFeed: boolean;
 }
@@ -85,6 +92,7 @@ export function createSchoolMotion() {
     position: new THREE.Vector3(),
     yaw: 0,
     pitch: 0,
+    roll: 0,
     scale: member.scale,
     canFeed: false,
   }));
@@ -95,6 +103,7 @@ export function createSchoolMotion() {
   const targets = poses.map(() => new THREE.Vector3());
   const turnFrom = new Float64Array(poses.length);
   const pitchFrom = new Float64Array(poses.length);
+  const rollFrom = new Float64Array(poses.length);
   const lastExit = new THREE.Vector3();
   const scratch = new THREE.Vector3();
   let initialized = false;
@@ -128,6 +137,7 @@ export function createSchoolMotion() {
       pose.scale = getSchoolScale(index, options.mobile);
       pose.yaw = 0;
       pose.pitch = 0;
+      pose.roll = 0;
       pose.canFeed = true;
     });
   }
@@ -154,9 +164,9 @@ export function createSchoolMotion() {
         .addScaledVector(scratch, Math.min(0.45, distance * 0.25));
       controlsB[index].copy(targets[index]);
       controlsB[index].x += Math.min(0.4, distance * 0.25);
-      // Return through each fish's own depth band rather than the group's center.
-      const low = index % 2 ? 6.4 : 5;
-      const high = index % 2 ? 7 : 5.6;
+      // Keep every return in the same clear foreground water as the swimming routes.
+      const low = DEPTH_CENTER - depthRadii[index];
+      const high = DEPTH_CENTER + depthRadii[index];
       controlsA[index].z = THREE.MathUtils.clamp(controlsA[index].z, low, high);
       controlsB[index].z = THREE.MathUtils.clamp(controlsB[index].z, low, high);
     });
@@ -171,16 +181,15 @@ export function createSchoolMotion() {
   function swimming(delta: number, options: SchoolOptions) {
     poses.forEach((pose, index) => {
       const angle = swimPhases[index];
-      const width = (options.mobile ? mobileWidths : widths)[index];
-      const curvature =
-        (width * DEPTH_RADIUS) /
-        (width * width * Math.cos(angle) ** 2 +
-          DEPTH_RADIUS ** 2 * Math.sin(angle) ** 2);
-      // Each fish slows for its own bend and varies its own forward speed.
-      const preferred =
-        (0.19 + index * 0.013) * (0.92 + Math.sin(clock * 0.11 + index) * 0.08);
-      const rate = Math.min(preferred, 1.05 / curvature);
+      routePoint(index, angle, options.mobile, scratch, directions[index]);
+      // Advancing by world distance keeps the fish moving steadily through broad turns.
+      const speed =
+        swimSpeeds[index] *
+        (options.mobile ? 0.8 : 1) *
+        (0.9 + Math.sin(clock * (0.13 + index * 0.008) + index) * 0.1);
+      const rate = speed / directions[index].length();
       swimPhases[index] += delta * rate;
+      const previousYaw = pose.yaw;
       routePoint(
         index,
         swimPhases[index],
@@ -189,6 +198,15 @@ export function createSchoolMotion() {
         directions[index],
       );
       heading(pose, directions[index]);
+      if (delta > 0) {
+        const yawRate = wrap(pose.yaw - previousYaw) / delta;
+        const bank = THREE.MathUtils.clamp(-yawRate * 0.24, -0.12, 0.12);
+        pose.roll = THREE.MathUtils.lerp(
+          pose.roll,
+          bank,
+          1 - Math.exp(-delta * 3),
+        );
+      }
       pose.scale = getSchoolScale(index, options.mobile);
       pose.canFeed = false;
     });
@@ -218,6 +236,7 @@ export function createSchoolMotion() {
         scratch.copy(targets[index]).sub(controlsB[index]);
         direction.addScaledVector(scratch, 3 * t * t);
         heading(pose, direction, delta);
+        pose.roll *= Math.exp(-delta * 3);
       });
       if (modeTime >= RETURN_SECONDS) {
         mode = "turning";
@@ -226,6 +245,7 @@ export function createSchoolMotion() {
           pose.position.copy(targets[index]);
           turnFrom[index] = pose.yaw;
           pitchFrom[index] = pose.pitch;
+          rollFrom[index] = pose.roll;
         });
       }
     } else if (mode === "turning" || mode === "resuming") {
@@ -247,6 +267,7 @@ export function createSchoolMotion() {
         }
         pose.yaw = turnFrom[index] + wrap(targetYaw - turnFrom[index]) * t;
         pose.pitch = THREE.MathUtils.lerp(pitchFrom[index], targetPitch, t);
+        pose.roll = rollFrom[index] * (1 - t);
       });
       if (modeTime >= TURN_SECONDS) {
         mode = mode === "turning" ? "feeding" : "swimming";
@@ -263,6 +284,7 @@ export function createSchoolMotion() {
         poses.forEach((pose, index) => {
           turnFrom[index] = pose.yaw;
           pitchFrom[index] = pose.pitch;
+          rollFrom[index] = pose.roll;
         });
       }
     }

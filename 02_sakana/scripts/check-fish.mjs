@@ -34,12 +34,12 @@ const server = await createServer({
 });
 try {
   const { createFish, setFishMouthOpen } = await server.ssrLoadModule(
-    "/src/fish/createFish.ts",
+    "/src/sakana/createFish.ts",
   );
   const { getFishMouthPosition } = await server.ssrLoadModule(
-    "/src/fish/fishModel.ts",
+    "/src/sakana/fishModel.ts",
   );
-  const { species } = await server.ssrLoadModule("/src/fish/species.ts");
+  const { species } = await server.ssrLoadModule("/src/sakana/species.ts");
   const { createFeeding } = await server.ssrLoadModule("/src/feeding.ts");
   const { createShelterMotion } = await server.ssrLoadModule(
     "/src/shelterMotion.ts",
@@ -283,10 +283,13 @@ try {
       const scene = new THREE.Scene();
       const feeding = createFeeding(scene);
       const feedingCamera = mobile || isSchool ? camera.clone() : camera;
-      if (mobile || isSchool) {
+      {
         feedingCamera.aspect = mobile ? 390 / 844 : 16 / 9;
         const distance =
-          (mobile ? 5.8 : 10.8) /
+          Math.max(
+            mobile ? 5.8 : 10.8,
+            isSchool ? feedingCamera.aspect * 6.4 : 0,
+          ) /
           (2 *
             Math.tan(THREE.MathUtils.degToRad(36 / 2)) *
             feedingCamera.aspect);
@@ -363,6 +366,7 @@ try {
           actor.group.scale.copy(speciesScale).multiplyScalar(scale);
           actor.group.position.copy(pose.position);
           actor.group.rotation.set(0, pose.yaw, pose.pitch, "YXZ");
+          actor.group.rotateX(pose.roll);
         });
       }
       function checkSpacing(label, ready = actors) {
@@ -389,17 +393,22 @@ try {
           for (let j = i + 1; j < count; j++) {
             const personalSpace =
               coreRadius * (actors[i].group.scale.y + actors[j].group.scale.y);
-            assert.ok(
-              actors[i].group.position.distanceTo(actors[j].group.position) >
-                personalSpace,
-              `${label}: fish ${i} and ${j} lost their personal space`,
+            const centerDistance = actors[i].group.position.distanceTo(
+              actors[j].group.position,
             );
+            if (!(centerDistance > personalSpace))
+              assert.fail(
+                `${label}: fish ${i} and ${j} lost their personal space: distance=${centerDistance}, required=${personalSpace}, positions=${JSON.stringify([actors[i].group.position.toArray(), actors[j].group.position.toArray()])}`,
+              );
             // While returning, rotated model AABBs contain large empty corners. Once
             // feeding at their own slots, even the full body/fin bounds must stay apart.
-            if (ready.includes(actors[i]) && ready.includes(actors[j]))
-              assert.ok(
-                !actorBounds[i].intersectsBox(actorBounds[j]),
-                `${label}: fish ${i} and ${j} overlapped while eating`,
+            if (
+              ready.includes(actors[i]) &&
+              ready.includes(actors[j]) &&
+              actorBounds[i].intersectsBox(actorBounds[j])
+            )
+              assert.fail(
+                `${label}: fish ${i} and ${j} overlapped while eating: ${JSON.stringify([i, j].map((index) => ({ position: actors[index].group.position.toArray(), rotation: actors[index].group.rotation.toArray(), min: actorBounds[index].min.toArray(), max: actorBounds[index].max.toArray() })))}`,
               );
           }
         previousPositions = actors.map((actor) => actor.group.position.clone());

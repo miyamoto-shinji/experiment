@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import type { FishSpecies } from "./species";
+import type { FishSpecies } from "./fishSpecies";
 import { setFishMouthOpen, type FishInstance } from "./fishModel";
 
 import {
@@ -15,7 +15,33 @@ import { createRockfishMouth } from "./rockfishMouth";
 import { fishVisualStyle as style } from "./visualStyle";
 import { applyFishSwimming } from "./swimMaterial";
 
-export function createRockfish(spec: FishSpecies): FishInstance {
+export const kasagoSpecies: FishSpecies = {
+  id: "kasago",
+  name: "カサゴ",
+  kanji: "笠子",
+  number: "003",
+  description: [
+    "赤茶色のまだら模様と、扇のような大きな胸びれ。",
+    "背中に並ぶトゲが目じるしの、岩場にすむ魚。",
+  ],
+  lengthLabel: "約30 cm",
+  scientificName: "Sebastiscus marmoratus",
+  family: "メバル科",
+  body: "rockfish",
+  palette: {
+    back: "#775247",
+    flank: "#be6642",
+    belly: "#e3cdb7",
+    fin: "#bd5c32",
+    stripe: "#edc49d",
+    finRay: "#783d2a",
+    finEdge: "#e9ac7d",
+  },
+  shape: { length: 0.97, height: 0.97, width: 1, tailSize: 1 },
+  motion: { frequency: 2.2, amplitude: 0.085 },
+};
+
+export function createKasago(spec: FishSpecies): FishInstance {
   const group = new THREE.Group();
   group.name = spec.id;
   const time = { value: 0 };

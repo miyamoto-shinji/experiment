@@ -198,11 +198,12 @@ try {
   const { createShelterMotion } = await server.ssrLoadModule(
     "/src/shelterMotion.ts",
   );
-  const { createFish } = await server.ssrLoadModule("/src/fish/createFish.ts");
-  const { species } = await server.ssrLoadModule("/src/fish/species.ts");
-  const { createSchoolMotion, SCHOOL_MEMBERS } = await server.ssrLoadModule(
-    "/src/schoolMotion.ts",
+  const { createFish } = await server.ssrLoadModule(
+    "/src/sakana/createFish.ts",
   );
+  const { species } = await server.ssrLoadModule("/src/sakana/species.ts");
+  const { createSchoolMotion, SCHOOL_MEMBERS, getSchoolViewTarget } =
+    await server.ssrLoadModule("/src/schoolMotion.ts");
   const scene = new THREE.Scene();
   const ocean = createOceanEnvironment(scene);
   assert.equal(
@@ -215,6 +216,21 @@ try {
   for (const mobile of [false, true]) {
     ocean.resize(mobile);
     const solids = rockSolids(ocean.group);
+    const camera = new THREE.PerspectiveCamera(
+      36,
+      mobile ? 390 / 844 : 16 / 9,
+      0.1,
+      120,
+    );
+    const target = getSchoolViewTarget(mobile, new THREE.Vector3());
+    const worldWidth = Math.max(mobile ? 5.8 : 10.8, camera.aspect * 6.4);
+    const distance =
+      worldWidth /
+      (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
+    camera.position.copy(target).add(new THREE.Vector3(0, 0.32, distance));
+    camera.lookAt(target);
+    camera.updateMatrixWorld(true);
+    const cameraPoint = new THREE.Vector3();
     for (const spec of Object.values(species)) {
       const fish = createFish(spec);
       const samples = surfaceSamples(fish);
@@ -246,6 +262,16 @@ try {
         for (let frame = 0; frame < 95 * 60; frame++) {
           const time = frame / 60;
           const pose = motion.update(1 / 60, options);
+          assert.ok(
+            Number.isFinite(pose.roll) && Math.abs(pose.roll) <= 0.1 + 1e-8,
+            "Invalid solo banking angle",
+          );
+          if (pose.phase === "cruising")
+            assert.equal(
+              pose.scale,
+              1,
+              "Solo depth must use perspective, not artificial model shrinking",
+            );
           visited ||= pose.phase === "visiting";
           const triggerRecall =
             recall === "inward-lane"
@@ -270,7 +296,7 @@ try {
               .multiplyScalar((mobile ? 0.8 : 1.14) * pose.scale);
             actor.position.copy(pose.position);
             actor.rotation.set(0, pose.yaw, pose.pitch, "YXZ");
-            actor.rotateX(Math.sin(time * 0.65) * 0.018);
+            actor.rotateX(pose.roll);
             actor.updateMatrix();
             const contact = collision(
               samples,
@@ -315,7 +341,7 @@ try {
           actor.position.copy(pose.position);
           actor.scale.copy(speciesScale).multiplyScalar(pose.scale);
           actor.rotation.set(0, pose.yaw, pose.pitch, "YXZ");
-          actor.rotateX(Math.sin(time * 0.6 + index) * 0.022);
+          actor.rotateX(pose.roll);
           actor.updateMatrix();
           assert.ok(
             actor.matrix.elements.every(Number.isFinite),
@@ -348,6 +374,12 @@ try {
         const motion = createSchoolMotion();
         const starts = withFeeding ? [11, 47, 103, 167] : [];
         const reachedFood = new Set();
+        const depthRanges = SCHOOL_MEMBERS.map(() => ({
+          min: Infinity,
+          max: -Infinity,
+          near: Infinity,
+          far: -Infinity,
+        }));
         for (let frame = 0; frame <= 200 * 30; frame++) {
           const time = frame / 30;
           const feedingStart = starts.find(
@@ -358,6 +390,20 @@ try {
             mobile,
             feeding: feedingStart !== undefined,
             reducedMotion: false,
+          });
+          poses.forEach((pose, index) => {
+            assert.ok(
+              Number.isFinite(pose.roll) && Math.abs(pose.roll) <= 0.12 + 1e-8,
+              "Invalid group banking angle",
+            );
+            const range = depthRanges[index];
+            range.min = Math.min(range.min, pose.position.z);
+            range.max = Math.max(range.max, pose.position.z);
+            cameraPoint
+              .copy(pose.position)
+              .applyMatrix4(camera.matrixWorldInverse);
+            range.near = Math.min(range.near, -cameraPoint.z);
+            range.far = Math.max(range.far, -cameraPoint.z);
           });
           if (feedingStart !== undefined && poses.every((pose) => pose.canFeed))
             reachedFood.add(feedingStart);
@@ -375,6 +421,17 @@ try {
             starts.length,
             `${spec.id}: not all five fish reached their feeding positions`,
           );
+        if (!contacts.length && !withFeeding)
+          depthRanges.forEach((range, index) => {
+            assert.ok(
+              range.max - range.min > 2.5,
+              `${spec.id}/${index}: the group fish stayed on a shallow depth plane`,
+            );
+            assert.ok(
+              range.far / range.near > (mobile ? 1.12 : 1.3),
+              `${spec.id}/${index}: depth did not produce visible perspective changes`,
+            );
+          });
       }
       // Layout changes must not interpolate through the instantly shifted banks.
       if (!contacts.length) {

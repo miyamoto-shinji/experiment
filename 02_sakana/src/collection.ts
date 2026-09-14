@@ -1,7 +1,7 @@
 import "./collection.css";
 import * as THREE from "three";
-import { createFish } from "./fish/createFish";
-import type { FishSpecies } from "./fish/species";
+import { createFish } from "./sakana/createFish";
+import type { FishSpecies } from "./sakana/fishSpecies";
 
 /** Let the modal paint and input handlers run between preview captures. */
 function afterPaint(signal: AbortSignal): Promise<void> {

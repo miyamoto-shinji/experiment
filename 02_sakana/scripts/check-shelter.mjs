@@ -31,12 +31,17 @@ try {
   function checkPose(pose, options) {
     assert.ok(phases.has(pose.phase), "Unknown swimming phase");
     assert.ok(
-      [...pose.position.toArray(), pose.yaw, pose.pitch, pose.scale].every(
-        Number.isFinite,
-      ),
+      [
+        ...pose.position.toArray(),
+        pose.yaw,
+        pose.pitch,
+        pose.roll,
+        pose.scale,
+      ].every(Number.isFinite),
       "Invalid swimming pose",
     );
     assert.ok(pose.scale >= 0.6 && pose.scale <= 1.1, "Unexpected fish size");
+    assert.ok(Math.abs(pose.roll) <= 0.09, "Swimming bank is excessive");
     assert.ok(
       pose.position.x >= options.exit.x - 2 &&
         pose.position.x <= options.shelter.x + 0.3,
@@ -48,10 +53,8 @@ try {
         Math.abs(pose.position.x - options.exit.x) <=
           (options.mobile ? 0.9 : 2),
       );
-      assert.ok(
-        Math.abs(pose.position.y - options.exit.y) <=
-          (options.mobile ? 0.5 : 0.8),
-      );
+      assert.ok(Math.abs(pose.position.y - options.exit.y) <= 0.600001);
+      near(pose.scale, 1, "Cruising changed the physical fish size");
       assert.equal(pose.hidden, false);
     }
     if (pose.canFeed) {
@@ -60,6 +63,8 @@ try {
         "Feeding began away from the exit",
       );
       near(pose.yaw, 0, "Feeding heading did not settle");
+      near(pose.pitch, 0, "Feeding pitch did not settle");
+      near(pose.roll, 0, "Feeding bank did not settle");
       assert.equal(pose.hidden, false);
     }
   }
@@ -74,6 +79,7 @@ try {
       "Fish heading snapped",
     );
     assert.ok(Math.abs(before.pitch - after.pitch) < 0.1, "Fish pitch snapped");
+    assert.ok(Math.abs(before.roll - after.roll) < 0.025, "Fish bank snapped");
     assert.ok(Math.abs(before.scale - after.scale) < 0.025, "Fish size jumped");
   }
 
@@ -177,14 +183,57 @@ try {
       );
     }
     const range = maximum.sub(minimum);
-    assert.ok(range.x > (mobile ? 0.5 : 1), "Fish did not travel horizontally");
-    assert.ok(range.y > 0.15, "Fish stayed at one height");
-    assert.ok(range.z > 0.25, "Fish stayed at one depth");
+    assert.ok(
+      range.x > (mobile ? 0.8 : 1.5),
+      "Fish did not travel horizontally",
+    );
+    assert.ok(range.y > 0.55, "Fish stayed at one height");
+    assert.ok(
+      range.z > 2.45 && range.z <= 2.600001,
+      "Fish did not use the central depth range",
+    );
     assert.ok(headingChange > 0.7, "Swimming direction did not change");
     assert.ok(
       visits >= 3 && exits >= visits - 1,
       "Rock visits did not resume swimming",
     );
+
+    // Check actual travelled distance and rendered orientation, not parameter speed.
+    motion.reset();
+    pose = motion.update(0, options);
+    const actor = new THREE.Object3D();
+    const travelDirection = new THREE.Vector3();
+    const forward = new THREE.Vector3();
+    let maximumBank = 0;
+    let previousSpeed = 0;
+    for (let frame = 0; frame < 35 * 60; frame++) {
+      const before = snapshot(pose);
+      pose = motion.update(step, options);
+      const speed = before.position.distanceTo(pose.position) / step;
+      assert.ok(speed <= (mobile ? 0.261 : 0.321), "Cruise speed surged");
+      assert.ok(
+        Math.abs(speed - previousSpeed) / step < 0.4,
+        "Cruise acceleration jumped",
+      );
+      previousSpeed = speed;
+      assert.ok(
+        angleDistance(before.yaw, pose.yaw) / step < 0.66,
+        "A narrow turn became abrupt",
+      );
+      maximumBank = Math.max(maximumBank, Math.abs(pose.roll));
+      if (frame > 3 * 60) {
+        assert.ok(speed > 0.07, "Cruising stalled during a depth turn");
+        travelDirection.copy(pose.position).sub(before.position).normalize();
+        actor.rotation.set(0, pose.yaw, pose.pitch, "YXZ");
+        actor.rotateX(pose.roll);
+        forward.set(-1, 0, 0).applyQuaternion(actor.quaternion);
+        assert.ok(
+          forward.dot(travelDirection) > 0.999,
+          "The fish slid sideways instead of facing its path",
+        );
+      }
+    }
+    assert.ok(maximumBank > 0.02, "Turns did not produce a swimming bank");
 
     for (const phase of [
       "cruising",
@@ -229,6 +278,7 @@ try {
     assert.equal(pose.hidden, false);
     near(pose.yaw, 0);
     near(pose.pitch, 0);
+    near(pose.roll, 0);
     pose = advance(motion, 60, { ...options, reducedMotion: true });
     assert.ok(pose.position.equals(options.exit));
     const unchanged = snapshot(pose);
@@ -243,7 +293,7 @@ try {
     assert.ok(options.exit.equals(initialExit));
   }
   console.log(
-    "Shelter motion: continuous desktop/mobile swimming, brief rock visits, smooth feeding recall and reduced motion passed.",
+    "Shelter motion: depth-aware constant-size desktop/mobile swimming, controlled speed, tangent heading/bank, brief rock visits, smooth feeding recall and reduced motion passed.",
   );
 } finally {
   await server.close();

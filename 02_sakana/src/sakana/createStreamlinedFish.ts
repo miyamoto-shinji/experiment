@@ -1,13 +1,47 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import type { FishSpecies } from "./species";
+import type { FishSpecies } from "./fishSpecies";
 import { fishVisualStyle as style } from "./visualStyle";
-import { createRockfish } from "./createRockfish";
 import { applyFishSwimming } from "./swimMaterial";
 import { setFishMouthOpen, type FishInstance } from "./fishModel";
-export { setFishMouthOpen, type FishInstance } from "./fishModel";
 
 type Point = [number, number, number];
+
+type BodyFinBuilder = (
+  start: number,
+  end: number,
+  height: number,
+  peak: number,
+  rays: number,
+  angle?: number,
+) => void;
+type SurfaceDiscBuilder = (
+  ex: number,
+  ey: number,
+  rx: number,
+  ry: number,
+  lift: number,
+  material: THREE.Material,
+) => void;
+
+/** Species details are built at their original position in the shared mesh order. */
+export interface StreamlinedFishFeatures {
+  bodyFins: (bodyFin: BodyFinBuilder) => void;
+  pelvicFin: (bodyFin: BodyFinBuilder, side: number) => void;
+  sideMarkings?: (context: {
+    spec: FishSpecies;
+    section: typeof section;
+    surfaceDisc: SurfaceDiscBuilder;
+    outline: THREE.Material;
+  }) => void;
+  lateralDetails?: (context: {
+    side: number;
+    section: typeof section;
+    surface: typeof surface;
+    tube: (points: Point[], radius: number, material: THREE.Material) => void;
+    lineMaterial: THREE.Material;
+  }) => void;
+}
 
 const mouthHinge = new THREE.Vector2(-1.69, -0.112);
 const jawName = "fish-lower-jaw";
@@ -237,11 +271,10 @@ function mouthInteriorGeometry() {
   return geometry;
 }
 
-export function createFish(spec: FishSpecies): FishInstance {
-  if (spec.body === "rockfish") return createRockfish(spec);
-  if (spec.body !== "carangid" && spec.body !== "clupeid")
-    throw new Error(`Unsupported fish body: ${spec.body}`);
-  const isSardine = spec.body === "clupeid";
+export function createStreamlinedFish(
+  spec: FishSpecies,
+  features: StreamlinedFishFeatures,
+): FishInstance {
   const group = new THREE.Group();
   group.name = spec.id;
   const time = { value: 0 };
@@ -485,14 +518,7 @@ export function createFish(spec: FishSpecies): FishInstance {
       0.0025,
     );
   }
-  if (isSardine) {
-    bodyFin(-0.35, 0.46, 0.46, 0.49, 12);
-    bodyFin(0.6, 1.43, 0.22, 0.3, 12, Math.PI);
-  } else {
-    bodyFin(-0.88, -0.06, 0.44, 0.66, 11);
-    bodyFin(0.06, 1.44, 0.34, 0.27, 17);
-    bodyFin(0.03, 1.4, 0.27, 0.3, 15, Math.PI);
-  }
+  features.bodyFins(bodyFin);
 
   // Two rounded, tapered lobes form a deeply forked golden tail.
   for (const sign of [-1, 1]) {
@@ -533,14 +559,7 @@ export function createFish(spec: FishSpecies): FishInstance {
       9,
       0.015,
     );
-    bodyFin(
-      isSardine ? -0.24 : -0.77,
-      isSardine ? 0.16 : -0.24,
-      isSardine ? 0.2 : 0.26,
-      0.58,
-      8,
-      Math.PI - side * 0.35,
-    );
+    features.pelvicFin(bodyFin, side);
 
     // The operculum is outlined in silver, with a small dark shoulder marking.
     const gill: Point[] = [
@@ -658,22 +677,7 @@ export function createFish(spec: FishSpecies): FishInstance {
         material,
       );
     }
-    if (isSardine) {
-      // Flush, bilateral markings, without the raised scutes of the horse mackerel.
-      for (let i = 0; i < 9; i++) {
-        const x = -0.69 + i * 0.23;
-        const [h, , cy] = section(x);
-        const radius = 0.048 - i * 0.0013;
-        surfaceDisc(
-          x,
-          cy + h * 0.37,
-          radius / spec.shape.length,
-          radius / spec.shape.height,
-          0.003,
-          outline,
-        );
-      }
-    }
+    features.sideMarkings?.({ spec, section, surfaceDisc, outline });
     eyePatch(0.216, 0.219, 0.004, 0, 0, silver);
     eyePatch(0.205, 0.208, 0.007, -0.004, 0.002, eyeRim);
     eyePatch(0.182, 0.185, 0.01, -0.006, 0.004, iris);
@@ -697,21 +701,7 @@ export function createFish(spec: FishSpecies): FishInstance {
       }),
     );
     tube(lateral, 0.005, lineMaterial);
-    for (let i = 0; i < (isSardine ? 0 : 25); i++) {
-      const x = 0.4 + i * 0.051,
-        [, , cy] = section(x);
-      const center = surface(x, cy + 0.015, side, 0.006);
-      const size = 0.022 - i * 0.0004;
-      tube(
-        [
-          [center[0] - 0.018, center[1] + size, center[2]],
-          [center[0] + 0.01, center[1], center[2] + 0.005 * side],
-          [center[0] - 0.018, center[1] - size, center[2]],
-        ],
-        0.0035,
-        lineMaterial,
-      );
-    }
+    features.lateralDetails?.({ side, section, surface, tube, lineMaterial });
   }
 
   // Each lip stays seated on its head surface. The lower silver lip travels

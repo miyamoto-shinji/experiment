@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { createOceanSeabed, sampleSeabedSurfaceHeight } from "./oceanSeabed";
+import { createOceanGravel } from "./oceanGravel";
 
 const palettes = [
   {
@@ -39,7 +41,8 @@ export function createOceanEnvironment(scene: THREE.Scene) {
     approach: exitPosition.clone(),
     gate: new THREE.Vector3(0.2, 0.25, -5.8),
   };
-  let seed = 90371;
+  // Terrain and gravel use their own layout; preserve the existing rock shapes.
+  let seed = 4306137;
   const random = () => {
     seed = (seed * 1664525 + 1013904223) >>> 0;
     return seed / 4294967296;
@@ -91,50 +94,8 @@ export function createOceanEnvironment(scene: THREE.Scene) {
   background.renderOrder = -100;
   group.add(background);
 
-  // A triangulated sandy channel recedes into the canyon, with moving light on its surface.
-  const floorGeometry = new THREE.PlaneGeometry(100, 110, 64, 70);
-  floorGeometry.rotateX(-Math.PI / 2);
-  floorGeometry.translate(0, -3.05, -5);
-  const floorPositions = floorGeometry.getAttribute("position");
-  const floorColors = [];
-  for (let i = 0; i < floorPositions.count; i++) {
-    const x = floorPositions.getX(i),
-      z = floorPositions.getZ(i);
-    floorPositions.setY(
-      i,
-      -3.05 + Math.sin(x * 0.57 + z * 0.29) * 0.09 + random() * 0.07,
-    );
-    const shade = 0.8 + random() * 0.2;
-    floorColors.push(shade, shade, shade);
-  }
-  floorGeometry.setAttribute(
-    "color",
-    new THREE.Float32BufferAttribute(floorColors, 3),
-  );
-  floorGeometry.computeVertexNormals();
-  const floorMaterial = new THREE.ShaderMaterial({
-    vertexColors: true,
-    toneMapped: false,
-    uniforms: { uTime: time, uDepth: depth, uSand: sand, uWater: water },
-    vertexShader: `varying vec3 vWorld,vColor; varying float vDistance; void main(){
-      vColor=color; vec4 w=modelMatrix*vec4(position,1.);vWorld=w.xyz;
-      vec4 mv=viewMatrix*w;vDistance=length(mv.xyz);gl_Position=projectionMatrix*mv;}`,
-    fragmentShader: `varying vec3 vWorld,vColor;varying float vDistance;uniform vec3 uSand,uWater;uniform float uTime,uDepth;
-    void main(){vec2 p=vWorld.xz*1.6;float t=uTime*.16;
-      float a=sin(p.x+sin(p.y*1.37+t)*.76+t);
-      float b=sin(p.y*1.18+sin(p.x*.89-t)*.86-t*.71);
-      float lines=pow(max(0.,1.-abs(a+b)*1.8),18.);
-      float ripple=sin(p.y*4.+sin(p.x)*.4)*.025;
-      vec3 c=uSand*vColor*(.91+ripple)+vec3(.3,.45,.43)*lines*pow(1.-uDepth,3.)*.5;
-      c=mix(c,uWater,1.-exp(-vDistance*vDistance*(.00045+uDepth*.0006)));
-      gl_FragColor=vec4(c,1.);
-      #include <colorspace_fragment>
-    }`,
-  });
-  group.add(new THREE.Mesh(floorGeometry, floorMaterial));
-
-  // Keep the rock composition stable when the sand tessellation changes.
-  seed = 4306137;
+  group.add(createOceanSeabed({ time, depth, sand, water }));
+  group.add(createOceanGravel({ depth, sand, water }));
   const rockMaterial = new THREE.MeshBasicMaterial({
     color: palettes[0].rock,
     vertexColors: true,
@@ -214,15 +175,11 @@ export function createOceanEnvironment(scene: THREE.Scene) {
   for (let i = 0; i < 32; i++) {
     const x = (random() - 0.5) * 22,
       z = -2 - random() * 28;
+    const sx = 0.12 + random() * 0.48;
+    const sy = 0.12 + random() * 0.34;
+    const sz = 0.15 + random() * 0.5;
     addDistant(
-      rock(
-        x,
-        -2.9,
-        z,
-        0.12 + random() * 0.48,
-        0.12 + random() * 0.34,
-        0.15 + random() * 0.5,
-      ),
+      rock(x, sampleSeabedSurfaceHeight(x, z) + sy * 0.35, z, sx, sy, sz),
     );
   }
   rockCluster(distant, "ocean-canyon");
@@ -260,6 +217,8 @@ export function createOceanEnvironment(scene: THREE.Scene) {
       -2.9,
       -2.5 - random() * 4,
     );
+    plant.position.y =
+      sampleSeabedSurfaceHeight(plant.position.x, plant.position.z) - 0.03;
     const height = 0.8 + random() * 2.5;
     const vertices: number[] = [],
       indices: number[] = [];
@@ -354,14 +313,14 @@ export function createOceanEnvironment(scene: THREE.Scene) {
     }
   }
   branch(
-    new THREE.Vector3(3.8, -2.95, -4),
-    new THREE.Vector3(3.8, -2.5, -4),
+    new THREE.Vector3(3.8, sampleSeabedSurfaceHeight(3.8, -4) - 0.03, -4),
+    new THREE.Vector3(3.8, sampleSeabedSurfaceHeight(3.8, -4) + 0.42, -4),
     0.043,
     3,
   );
   branch(
-    new THREE.Vector3(-4.9, -2.95, -5),
-    new THREE.Vector3(-4.9, -2.4, -5),
+    new THREE.Vector3(-4.9, sampleSeabedSurfaceHeight(-4.9, -5) - 0.03, -5),
+    new THREE.Vector3(-4.9, sampleSeabedSurfaceHeight(-4.9, -5) + 0.52, -5),
     0.05,
     3,
   );
@@ -418,6 +377,7 @@ export function createOceanEnvironment(scene: THREE.Scene) {
       materials = new Set<THREE.Material>();
     group.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
+      if (object instanceof THREE.InstancedMesh) object.dispose();
       geometries.add(object.geometry);
       (Array.isArray(object.material)
         ? object.material
@@ -430,6 +390,9 @@ export function createOceanEnvironment(scene: THREE.Scene) {
   update(0, 0);
   return {
     group,
+    get depth() {
+      return currentDepth;
+    },
     setDepth,
     resize,
     update,

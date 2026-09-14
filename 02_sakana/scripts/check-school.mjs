@@ -34,8 +34,10 @@ try {
     getSchoolScale,
     getSchoolViewTarget,
   } = await server.ssrLoadModule("/src/schoolMotion.ts");
-  const { createFish } = await server.ssrLoadModule("/src/fish/createFish.ts");
-  const { species } = await server.ssrLoadModule("/src/fish/species.ts");
+  const { createFish } = await server.ssrLoadModule(
+    "/src/sakana/createFish.ts",
+  );
+  const { species } = await server.ssrLoadModule("/src/sakana/species.ts");
   assert.equal(
     SCHOOL_MEMBERS.length,
     5,
@@ -48,6 +50,8 @@ try {
     const fish = createFish(spec);
     const bounds = new THREE.Box3();
     fish.group.updateMatrixWorld(true);
+    const fullBounds = new THREE.Box3().setFromObject(fish.group);
+    const personalRadius = fullBounds.getSize(new THREE.Vector3()).y * 0.4;
     fish.group.traverse((object) => {
       if (!object.geometry || !object.material?.map) return;
       const positions = object.geometry.getAttribute("position");
@@ -62,12 +66,21 @@ try {
     const box = new OBB().fromBox3(bounds);
     box.halfSize.z += 0.12; // Tail bending also deforms the rear of the body.
     fish.dispose();
-    return { id: spec.id, box, actors: SCHOOL_MEMBERS.map(() => new OBB()) };
+    return {
+      id: spec.id,
+      box,
+      fullBounds,
+      personalRadius,
+      actors: SCHOOL_MEMBERS.map(() => new OBB()),
+      fullActors: SCHOOL_MEMBERS.map(() => new THREE.Box3()),
+    };
   });
   const target = new THREE.Vector3();
   const velocity = new THREE.Vector3();
   const forward = new THREE.Vector3();
   const quaternion = new THREE.Quaternion();
+  const bankQuaternion = new THREE.Quaternion();
+  const longitudinalAxis = new THREE.Vector3(1, 0, 0);
   const euler = new THREE.Euler(0, 0, 0, "YXZ");
   const scale = new THREE.Vector3();
   const matrices = SCHOOL_MEMBERS.map(() => new THREE.Matrix4());
@@ -78,11 +91,18 @@ try {
   function checkBodies(poses, label) {
     poses.forEach((pose, index) => {
       assert.ok(
-        [...pose.position.toArray(), pose.yaw, pose.pitch, pose.scale].every(
-          Number.isFinite,
-        ),
+        [
+          ...pose.position.toArray(),
+          pose.yaw,
+          pose.pitch,
+          pose.roll,
+          pose.scale,
+        ].every(Number.isFinite),
       );
       quaternion.setFromEuler(euler.set(0, pose.yaw, pose.pitch));
+      quaternion.multiply(
+        bankQuaternion.setFromAxisAngle(longitudinalAxis, pose.roll),
+      );
       matrices[index].compose(
         pose.position,
         quaternion,
@@ -96,6 +116,11 @@ try {
       for (let a = 0; a < poses.length; a++)
         for (let b = a + 1; b < poses.length; b++) {
           assert.ok(
+            poses[a].position.distanceTo(poses[b].position) >
+              model.personalRadius * (poses[a].scale + poses[b].scale),
+            `${label}/${model.id}: fish ${a} and ${b} lost their personal space`,
+          );
+          assert.ok(
             !model.actors[a].intersectsOBB(model.actors[b]),
             `${label}/${model.id}: fish ${a} and ${b} bodies overlap`,
           );
@@ -103,6 +128,7 @@ try {
     }
   }
   function checkRest(poses, options) {
+    checkBodies(poses, "feeding slots");
     poses.forEach((pose, index) => {
       assert.equal(
         getSchoolRestPosition(index, options.exit, options.mobile, target),
@@ -115,8 +141,21 @@ try {
       assert.equal(pose.scale, getSchoolScale(index, options.mobile));
       assert.ok(Math.abs(wrap(pose.yaw)) < 1e-8);
       assert.ok(Math.abs(pose.pitch) < 1e-8);
+      assert.ok(Math.abs(pose.roll) < 1e-8);
       assert.equal(pose.canFeed, true);
     });
+    // At the settled feeding slots, the complete fins and tail also stay separate.
+    for (const model of bodyBounds) {
+      model.fullActors.forEach((box, index) =>
+        box.copy(model.fullBounds).applyMatrix4(matrices[index]),
+      );
+      for (let a = 0; a < poses.length; a++)
+        for (let b = a + 1; b < poses.length; b++)
+          assert.ok(
+            !model.fullActors[a].intersectsBox(model.fullActors[b]),
+            `${model.id}: fish ${a} and ${b} fins overlap at their feeding slots`,
+          );
+    }
   }
   function advance(motion, seconds, options, label = "transition") {
     const frames = Math.ceil(seconds * 60);
@@ -133,6 +172,10 @@ try {
         assert.ok(
           Math.abs(wrap(pose.yaw - previous[index].yaw)) < 0.07,
           `${label}: heading flipped`,
+        );
+        assert.ok(
+          Math.abs(pose.roll - previous[index].roll) < 0.015,
+          `${label}: banking snapped`,
         );
       });
       previous = snapshot(poses);
@@ -162,6 +205,11 @@ try {
     const distances = new Float64Array(5);
     const moving = new Uint32Array(5);
     const aligned = new Uint32Array(5);
+    const minSpeed = new Float64Array(5).fill(Infinity);
+    const maxSpeed = new Float64Array(5);
+    const lastSpeed = new Float64Array(5);
+    const maxBank = new Float64Array(5);
+    const banksWithTurns = new Uint32Array(5);
     const headings = Array.from({ length: 5 }, () => []);
     let previous = snapshot(reused);
     const traces = Array.from({ length: 5 }, () => []);
@@ -174,6 +222,30 @@ try {
         const distance = pose.position.distanceTo(previous[index].position);
         distances[index] += distance;
         assert.ok(distance < 0.06, "Swimming jumped between frames");
+        const speed = distance * 60;
+        minSpeed[index] = Math.min(minSpeed[index], speed);
+        maxSpeed[index] = Math.max(maxSpeed[index], speed);
+        if (frame > 1)
+          assert.ok(
+            Math.abs(speed - lastSpeed[index]) < 0.004,
+            "Forward speed changed abruptly",
+          );
+        lastSpeed[index] = speed;
+        assert.ok(
+          Math.abs(pose.roll) <= 0.120001,
+          "A turn bank became excessive",
+        );
+        assert.ok(
+          Math.abs(pose.roll - previous[index].roll) < 0.015,
+          "A turn bank snapped",
+        );
+        maxBank[index] = Math.max(maxBank[index], Math.abs(pose.roll));
+        const turn = wrap(pose.yaw - previous[index].yaw);
+        if (pose.roll * turn < 0) banksWithTurns[index]++;
+        assert.ok(
+          pose.position.z >= 4.66 && pose.position.z <= 8.5,
+          "A circuit left the clear near/far water",
+        );
         assert.ok(
           Math.abs(wrap(pose.yaw - previous[index].yaw)) < 0.06,
           "A swimming turn snapped",
@@ -207,8 +279,8 @@ try {
         `Fish ${index} stayed in a small corner`,
       );
       assert.ok(
-        range.y > 0.25 && range.z > 0.5,
-        `Fish ${index} did not swim through 3D water`,
+        range.y > 0.25 && range.z > 3,
+        `Fish ${index} did not swim through deep, vertically varied water`,
       );
       assert.ok(
         distances[index] > (mobile ? 25 : 35),
@@ -217,6 +289,14 @@ try {
       assert.ok(
         moving[index] > 11500 && aligned[index] / moving[index] > 0.98,
         `Fish ${index} stopped or slid sideways`,
+      );
+      assert.ok(
+        minSpeed[index] / maxSpeed[index] > 0.76,
+        `Fish ${index} slowed at the narrow ends of its circuit`,
+      );
+      assert.ok(
+        maxBank[index] > 0.035 && banksWithTurns[index] > 11000,
+        `Fish ${index} did not bank smoothly with its turns`,
       );
       const unwrappedRange =
         Math.max(...headings[index]) - Math.min(...headings[index]);
@@ -305,7 +385,7 @@ try {
     checkBodies(poses, "resized");
   }
   console.log(
-    "School motion: five independently swimming fish, broad 3D routes, body OBB clearance, smooth turns and personal feeding returns passed.",
+    "School motion: five deep-water circuits, steady world speeds, tangent headings, smooth banks, rolled-body OBB clearance and personal feeding returns passed.",
   );
 } finally {
   await server.close();

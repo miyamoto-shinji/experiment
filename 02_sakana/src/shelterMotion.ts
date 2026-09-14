@@ -17,6 +17,7 @@ export interface ShelterPose {
   scale: number;
   yaw: number;
   pitch: number;
+  roll: number;
   canFeed: boolean;
   hidden: boolean;
   phase: SwimPhase;
@@ -37,6 +38,7 @@ export function createShelterMotion() {
     scale: 1,
     yaw: 0,
     pitch: 0,
+    roll: 0,
     canFeed: false,
     hidden: false,
     phase: "cruising",
@@ -68,10 +70,16 @@ export function createShelterMotion() {
   let requestFood = false;
   let phaseTime = 0;
   let mobile = false;
+  let cruiseAngle = 0;
+  let cruiseSpeed = 0;
 
   function enter(phase: SwimPhase) {
     pose.phase = phase;
     phaseTime = 0;
+    if (phase === "cruising") {
+      cruiseAngle = 0;
+      cruiseSpeed = 0;
+    }
   }
 
   function reset() {
@@ -201,6 +209,8 @@ export function createShelterMotion() {
   }
 
   function travel(delta: number, options: ShelterOptions) {
+    // Settle a swimming bank before the existing narrow-passage stages.
+    pose.roll *= Math.exp(-delta * 6);
     let remaining = delta;
     while (remaining > 1e-10 && stepIndex < steps.length) {
       const step = steps[stepIndex];
@@ -254,33 +264,54 @@ export function createShelterMotion() {
     pose.position.copy(options.exit);
     pose.yaw = 0;
     pose.pitch = 0;
+    pose.roll = 0;
     pose.scale = 1;
   }
 
   function cruise(options: ShelterOptions, delta: number) {
-    // A slow oval in depth avoids abrupt direction changes at the screen edges.
-    const time = Math.max(0, phaseTime - 3);
-    const ramp = Math.min(time / 3, 1);
-    const theta = (time - (time < 3 ? time * (1 - ramp / 2) : 1.5)) * 0.2;
-    const width = options.mobile ? 0.58 : 1.35;
-    const bias = options.mobile ? 0.04 : 0.25;
-    const depth = options.mobile ? 0.62 : 0.82;
-    const rise = options.mobile ? 0.15 : 0.3;
+    // The full-size fish follows the clear central water, rising as it recedes.
+    // Parameter speed follows world distance; tighter turns slow before the apex.
+    const width = options.mobile ? 0.45 : 0.85;
+    const bias = 0.1;
+    const depth = 1.3;
+    const rise = 0.3;
+    const tangent = (theta: number) =>
+      direction.set(
+        -width * Math.cos(theta) - bias * Math.sin(theta),
+        rise * Math.sin(theta),
+        -depth * Math.sin(theta),
+      );
+    tangent(cruiseAngle);
+    const length = direction.length();
+    const yawPerAngle =
+      (depth * width) / (direction.x * direction.x + direction.z * direction.z);
+    const turnSpeed = (0.65 * length) / yawPerAngle;
+    const openSpeed = options.mobile ? 0.26 : 0.32;
+    // Blend the limits before the turn, leaving room for a gradual deceleration.
+    const targetSpeed =
+      (openSpeed * turnSpeed) / Math.hypot(openSpeed, turnSpeed);
+    cruiseSpeed += THREE.MathUtils.clamp(
+      targetSpeed - cruiseSpeed,
+      -0.18 * delta,
+      0.12 * delta,
+    );
+    cruiseSpeed = Math.min(cruiseSpeed, turnSpeed);
+    const midpoint = cruiseAngle + (cruiseSpeed * delta) / (2 * length);
+    cruiseAngle += (cruiseSpeed * delta) / tangent(midpoint).length();
+    const theta = cruiseAngle;
     pose.position.set(
       options.exit.x - width * Math.sin(theta) - bias * (1 - Math.cos(theta)),
-      options.exit.y +
-        rise * Math.sin(theta * 2) +
-        rise * 0.45 * Math.sin(theta),
+      options.exit.y + rise * (1 - Math.cos(theta)),
       options.exit.z - depth * (1 - Math.cos(theta)),
     );
-    direction.set(
-      -width * Math.cos(theta) - bias * Math.sin(theta),
-      2 * rise * Math.cos(theta * 2) + rise * 0.45 * Math.cos(theta),
-      -depth * Math.sin(theta),
-    );
-    if (time === 0) direction.set(-1, 0, 0);
+    tangent(theta);
+    const previousYaw = pose.yaw;
     orient(delta);
-    pose.scale = 1 - (0.1 * (1 - Math.cos(theta))) / 2;
+    const yawSpeed = delta > 0 ? wrapAngle(pose.yaw - previousYaw) / delta : 0;
+    const bank = THREE.MathUtils.clamp(-yawSpeed * 0.12, -0.09, 0.09);
+    pose.roll = THREE.MathUtils.lerp(pose.roll, bank, 1 - Math.exp(-delta * 3));
+    // Only perspective changes the apparent size during open-water swimming.
+    pose.scale = 1;
   }
 
   function advance(delta: number, options: ShelterOptions) {

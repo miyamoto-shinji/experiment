@@ -1,6 +1,6 @@
 import { createFishCollection } from "./collection";
 import { getElement } from "./dom";
-import type { FishSpecies } from "./fish/species";
+import type { FishSpecies } from "./sakana/fishSpecies";
 import { initializeIcons, setButtonIcon } from "./icons";
 import { initializeOceanDepth } from "./oceanDepth";
 

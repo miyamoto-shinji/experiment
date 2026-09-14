@@ -32,7 +32,7 @@ try {
   const { createAquariumFish } = await server.ssrLoadModule(
     "/src/aquariumFish.ts",
   );
-  const { species } = await server.ssrLoadModule("/src/fish/species.ts");
+  const { species } = await server.ssrLoadModule("/src/sakana/species.ts");
   const { getSchoolRestPosition, getSchoolScale, getSchoolViewTarget } =
     await server.ssrLoadModule("/src/schoolMotion.ts");
   const scene = new THREE.Scene();
@@ -77,7 +77,10 @@ try {
     aquarium.setLayout(mobile);
     camera.aspect = mobile ? 390 / 844 : 16 / 9;
     const distance =
-      (mobile ? 5.8 : 10.8) /
+      Math.max(
+        mobile ? 5.8 : 10.8,
+        aquarium.schoolActive ? camera.aspect * 6.4 : 0,
+      ) /
       (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
     if (aquarium.schoolActive) getSchoolViewTarget(mobile, viewTarget);
     else viewTarget.set(0, 0, 0);

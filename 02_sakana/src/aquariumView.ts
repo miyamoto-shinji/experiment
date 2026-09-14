@@ -47,12 +47,26 @@ export function createAquariumView(container: HTMLElement) {
     const layoutChanged = mobile !== nextMobile;
     mobile = nextMobile;
     camera.aspect = width / height;
-    const worldWidth = mobile ? 5.8 : width < 1100 ? 10.4 : 10.8;
+    const worldWidth = Math.max(
+      mobile ? 5.8 : width < 1100 ? 10.4 : 10.8,
+      // Leave vertical room for the near side of the deeper circuits on wide screens.
+      schoolActive ? camera.aspect * 6.4 : 0,
+    );
     baseDistance =
       worldWidth /
       (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
-    if (schoolActive) getSchoolViewTarget(mobile, viewTarget);
-    else viewTarget.set(0, 0, 0);
+    if (schoolActive) {
+      getSchoolViewTarget(mobile, viewTarget);
+      // Center the taller school as the canvas widens; narrow phones retain
+      // room below the fish for the species information.
+      if (mobile) {
+        viewTarget.y = THREE.MathUtils.lerp(
+          viewTarget.y,
+          2.8,
+          THREE.MathUtils.smoothstep(camera.aspect, 0.58, 0.82),
+        );
+      }
+    } else viewTarget.set(0, 0, 0);
     camera.position.set(
       viewTarget.x,
       viewTarget.y + 0.32,

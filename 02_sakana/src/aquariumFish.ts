@@ -3,9 +3,9 @@ import {
   createFish,
   setFishMouthOpen,
   type FishInstance,
-} from "./fish/createFish";
-import { getFishMouthPosition } from "./fish/fishModel";
-import type { FishSpecies } from "./fish/species";
+} from "./sakana/createFish";
+import { getFishMouthPosition } from "./sakana/fishModel";
+import type { FishSpecies } from "./sakana/fishSpecies";
 import { createFeeding, type FeedingActor } from "./feeding";
 import { createShelterMotion } from "./shelterMotion";
 import {
@@ -137,7 +137,7 @@ export function createAquariumFish(
         group.scale.copy(speciesScale).multiplyScalar(pose.scale);
         group.position.copy(pose.position);
         group.rotation.set(0, pose.yaw, pose.pitch, "YXZ");
-        group.rotateX(Math.sin(elapsed * 0.6 + index * 1.7) * 0.018);
+        group.rotateX(pose.roll);
       });
       feeding.update(
         delta,
@@ -157,7 +157,7 @@ export function createAquariumFish(
         .multiplyScalar(displayScale * pose.scale);
       fish.group.position.copy(pose.position);
       fish.group.rotation.set(0, pose.yaw, pose.pitch, "YXZ");
-      fish.group.rotateX(Math.sin(elapsed * 0.65) * 0.018);
+      fish.group.rotateX(pose.roll);
       feeding.update(delta, pose.canFeed ? [feedingActors[0]] : []);
     }
   }

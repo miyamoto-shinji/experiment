@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5174",
     "build": "tsc --noEmit && vite build",
-    "test": "node scripts/check-ocean.mjs && node scripts/check-shelter.mjs && node scripts/check-school.mjs && node scripts/check-fish.mjs && node scripts/check-rock-clearance.mjs && node scripts/check-aquarium-fish.mjs",
+    "test": "node scripts/check-fish-registry.mjs && node scripts/check-ocean.mjs && node scripts/check-seabed.mjs && node scripts/check-shelter.mjs && node scripts/check-school.mjs && node scripts/check-fish.mjs && node scripts/check-rock-clearance.mjs && node scripts/check-aquarium-fish.mjs && node scripts/check-ocean-life.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 4174"
   },
   "dependencies": {

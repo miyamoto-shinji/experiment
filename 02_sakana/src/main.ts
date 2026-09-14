@@ -3,9 +3,10 @@ import { createAquariumFish } from "./aquariumFish";
 import { createAquariumUI } from "./aquariumUI";
 import { createAquariumView } from "./aquariumView";
 import { getElement } from "./dom";
-import { species } from "./fish/species";
+import { species } from "./sakana/species";
 import { createOceanEnvironment } from "./oceanEnvironment";
 import { createOceanParticles } from "./oceanParticles";
+import { createOceanLife } from "./oceanLife";
 
 let disposeActiveAquarium: (() => void) | undefined;
 
@@ -35,6 +36,8 @@ export async function startAquarium(): Promise<void> {
     cleanups.push(view.dispose);
     const environment = createOceanEnvironment(view.scene);
     cleanups.push(environment.dispose);
+    const backgroundLife = createOceanLife(view.scene, environment);
+    cleanups.push(backgroundLife.dispose);
     const fish = createAquariumFish(view.scene, environment, species.aji);
     cleanups.push(fish.dispose);
     const particles = createOceanParticles(
@@ -87,6 +90,7 @@ export async function startAquarium(): Promise<void> {
       previous = now;
       if (!reducedMotion.matches) elapsed += delta;
       environment.update(elapsed, delta);
+      backgroundLife.update(delta, view.mobile, reducedMotion.matches);
       fish.update(delta, elapsed, reducedMotion.matches);
       particles.update(elapsed);
       ui.setCanFeed(fish.canFeed);

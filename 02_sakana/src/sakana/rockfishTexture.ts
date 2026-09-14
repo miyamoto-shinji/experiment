@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { FishSpecies } from "./species";
+import type { FishSpecies } from "./fishSpecies";
 
 export function mottledTexture(spec: FishSpecies) {
   const canvas = document.createElement("canvas");
