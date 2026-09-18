@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createOceanSeabed, sampleSeabedSurfaceHeight } from "./oceanSeabed";
 import { createOceanGravel } from "./oceanGravel";
+import { createOceanBubbles } from "./oceanBubbles";
+import { createOceanShipwreck } from "./oceanShipwreck";
 
 const palettes = [
   {
@@ -86,6 +88,10 @@ export function createOceanEnvironment(scene: THREE.Scene) {
 
   group.add(createOceanSeabed({ depth, sand, water }));
   group.add(createOceanGravel({ depth, sand, water }));
+  const bubbles = createOceanBubbles();
+  group.add(bubbles.group);
+  const shipwreck = createOceanShipwreck();
+  group.add(shipwreck.group);
   const rockMaterial = new THREE.MeshBasicMaterial({
     color: palettes[0].rock,
     vertexColors: true,
@@ -176,7 +182,7 @@ export function createOceanEnvironment(scene: THREE.Scene) {
   const left = rockCluster(
     [
       rock(-5.5, -2.5, -0.3, 2.5, 1.3, 1.7),
-      rock(-5.9, -1.35, -1.2, 1.8, 1.4, 1.7),
+      rock(-6.5, -0.7, -1.2, 2.35, 2.75, 1.9),
       rock(-4.15, -2.45, 0.6, 1.35, 0.7, 1.3),
       rock(-3.35, -2.75, 0.75, 0.67, 0.42, 0.62),
     ],
@@ -330,6 +336,8 @@ export function createOceanEnvironment(scene: THREE.Scene) {
     currentDepth = THREE.MathUtils.damp(currentDepth, targetDepth, 3.5, dt);
     const time = Number.isFinite(timeSeconds) ? timeSeconds : 0;
     depth.value = currentDepth;
+    bubbles.update(time, currentDepth);
+    shipwreck.setDepth(currentDepth);
     paint(top.value, "top");
     paint(water.value, "water");
     paint(bottom.value, "bottom");

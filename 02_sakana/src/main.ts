@@ -19,6 +19,7 @@ export async function startAquarium(): Promise<void> {
   let disposed = false;
   let contextLost = false;
   let elapsed = 0;
+  let environmentElapsed = 0;
   let previous = performance.now();
 
   function dispose() {
@@ -87,8 +88,11 @@ export async function startAquarium(): Promise<void> {
       if (disposed || contextLost) return;
       const delta = Math.min((now - previous) / 1000, 0.05);
       previous = now;
-      if (!reducedMotion.matches) elapsed += delta;
-      environment.update(elapsed, delta);
+      if (!reducedMotion.matches) {
+        elapsed += delta;
+        environmentElapsed += delta;
+      }
+      environment.update(environmentElapsed, delta);
       backgroundLife.update(delta, view.mobile, reducedMotion.matches);
       fish.update(delta, elapsed, reducedMotion.matches);
       particles.update(elapsed);
